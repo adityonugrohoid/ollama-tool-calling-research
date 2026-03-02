@@ -159,6 +159,52 @@ TOOL_GET_POPULATION = make_tool(
 PARALLEL_TOOLS = [TOOL_GET_WEATHER, TOOL_GET_TEMPERATURE, TOOL_GET_POPULATION]
 
 
+# ─── Voxel Arena Tools ───────────────────────────────────────────────
+
+BLOCK_TYPES: list[str] = [
+    "stone", "dirt", "grass", "wood", "sand", "water",
+    "glass", "brick", "iron", "gold", "diamond", "obsidian",
+]
+
+TOOL_PLACE_BLOCK = make_tool(
+    name="placeBlock",
+    description="Place a block at the specified position in the voxel world",
+    properties={
+        "x": {"type": "integer", "description": "X coordinate (0-15)", "minimum": 0, "maximum": 15},
+        "y": {"type": "integer", "description": "Y coordinate (0-15)", "minimum": 0, "maximum": 15},
+        "z": {"type": "integer", "description": "Z coordinate (0-15)", "minimum": 0, "maximum": 15},
+        "type": {"type": "string", "description": "Block type to place", "enum": BLOCK_TYPES},
+    },
+)
+
+TOOL_REMOVE_BLOCK = make_tool(
+    name="removeBlock",
+    description="Remove the block at the specified position in the voxel world",
+    properties={
+        "x": {"type": "integer", "description": "X coordinate (0-15)", "minimum": 0, "maximum": 15},
+        "y": {"type": "integer", "description": "Y coordinate (0-15)", "minimum": 0, "maximum": 15},
+        "z": {"type": "integer", "description": "Z coordinate (0-15)", "minimum": 0, "maximum": 15},
+    },
+)
+
+TOOL_GET_WORLD_STATE = make_tool(
+    name="getWorldState",
+    description="Get the current state of the voxel world",
+    properties={},
+    required=[],
+)
+
+TOOL_DONE = make_tool(
+    name="done",
+    description="Signal that the task is complete with a summary description",
+    properties={
+        "description": {"type": "string", "description": "Summary of what was accomplished"},
+    },
+)
+
+VOXEL_TOOLS = [TOOL_PLACE_BLOCK, TOOL_REMOVE_BLOCK, TOOL_GET_WORLD_STATE, TOOL_DONE]
+
+
 # ─── Scaling Test Tools ─────────────────────────────────────────────
 
 def generate_dummy_tools(count: int) -> list[dict]:
