@@ -20,7 +20,7 @@ Research repo documenting tool calling inconsistencies across open-source LLMs s
 
 ### Tests (tests/)
 - `config.py` — Model lists (P0/P1/P2, 32 total), tool definitions, `generate_dummy_tools(n)`, `build_text_tool_system_prompt()`.
-- 9 test scripts: `test_single_tool`, `test_multi_tool`, `test_parallel_calls`, `test_multi_step`, `test_streaming_tools`, `test_tool_count_scaling`, `test_thinking_with_tools`, `test_text_fallback`, `test_voxel_tools`.
+- 10 test scripts: `test_single_tool`, `test_multi_tool`, `test_parallel_calls`, `test_multi_step`, `test_streaming_tools`, `test_tool_count_scaling`, `test_thinking_with_tools`, `test_text_fallback`, `test_voxel_tools`, `test_voxel_tools_text`.
 - Each test takes a model name, returns a `TestResult` dataclass.
 
 ### Entry Point

@@ -107,6 +107,12 @@ Each response is classified into one of three format types:
   - `tool_discrimination` — calls removeBlock not placeBlock
 - Pass = all 5 sub-checks pass; each is a single independent API call
 
+### 10. Voxel Arena Tools — Text Fallback (`test_voxel_tools_text.py`)
+- **What:** Same 5 sub-checks as Test 9, but via text-based tool calling (no native `tools` parameter). Uses `build_text_tool_system_prompt()` with enum values and min/max constraints rendered in the prompt.
+- **Validates:** Whether text-based tool calling handles real-world tool complexity (enums, integer constraints, zero-param, discrimination)
+- **Research question:** Comparing Test 9 (native) vs Test 10 (text) per model reveals whether text-based fallback is a viable uniform solution — models that fail native but pass text suggest text as a universal workaround.
+- Same 5 sub-checks as Test 9; pass = all 5 pass
+
 ## Schema Validation
 
 All tool call arguments are validated against the provided tool schema:
