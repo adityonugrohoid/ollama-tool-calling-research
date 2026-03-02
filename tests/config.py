@@ -271,7 +271,15 @@ def format_text_tool_descriptions(tools: list[dict]) -> str:
         param_strs: list[str] = []
         for pname, pdef in props.items():
             req = " (required)" if pname in required else " (optional)"
-            param_strs.append(f"    - {pname}: {pdef.get('type', 'any')} — {pdef.get('description', '')}{req}")
+            constraints: list[str] = []
+            if "enum" in pdef:
+                constraints.append(f"values: {pdef['enum']}")
+            if "minimum" in pdef:
+                constraints.append(f"min: {pdef['minimum']}")
+            if "maximum" in pdef:
+                constraints.append(f"max: {pdef['maximum']}")
+            constraint_str = f" [{', '.join(constraints)}]" if constraints else ""
+            param_strs.append(f"    - {pname}: {pdef.get('type', 'any')} — {pdef.get('description', '')}{constraint_str}{req}")
 
         lines.append(f"- {func['name']}: {func['description']}")
         if param_strs:
