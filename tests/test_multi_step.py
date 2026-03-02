@@ -3,20 +3,20 @@
 Runs a 5-turn tool calling conversation. Each turn:
 1. Send user message (or tool result)
 2. Get model response
-3. Log whether the response used native or text format
+3. Log the classification (native/text/misrouted/none)
 4. Feed simulated tool result back
 
 THIS IS KEY — detects mid-conversation format switching.
 """
 
 from src.ollama_client import chat
-from src.tool_parser_native import parse_native
-from src.tool_parser_text import parse_text
+from src.response_layers import extract_layers
+from src.stream_collector import collect_streaming_response
 from src.test_runner import TestResult
-from tests.config import DEFAULT_OPTIONS, TOOL_GET_WEATHER
+from tests.config import DEFAULT_OPTIONS, TOOL_GET_WEATHER, FlagCombo
 
 
-TEST_NAME = "test_multi_step"
+TEST_NAME = "multi_step"
 
 # 5 cities to query across turns
 CITIES = ["Tokyo", "Paris", "New York", "London", "Sydney"]
@@ -31,11 +31,11 @@ FAKE_WEATHER = {
 }
 
 
-def run(model: str) -> TestResult:
+def run(model: str, flags: FlagCombo) -> TestResult:
     """Run 5-turn multi-step tool calling test."""
     tools = [TOOL_GET_WEATHER]
     messages: list[dict] = []
-    turn_formats: list[str] = []  # Track format per turn
+    turn_formats: list[str] = []  # Track classification per turn
     turn_details: list[dict] = []
 
     for turn_idx, city in enumerate(CITIES):
@@ -52,55 +52,42 @@ def run(model: str) -> TestResult:
             })
 
         # Get model response
-        response = chat(
+        response_raw = chat(
             model=model,
             messages=messages,
             test_name=f"{TEST_NAME}_turn{turn_idx + 1}",
             tools=tools,
-            stream=False,
+            stream=flags.stream,
             options=DEFAULT_OPTIONS,
+            think=True if flags.think else None,
         )
 
-        # Try native parsing
-        native_result = parse_native(response)
-        text_result = parse_text(response)
-
-        if native_result.success:
-            fmt = "native"
-            tool_calls = native_result.tool_calls
-        elif text_result.success:
-            fmt = "text"
-            tool_calls = text_result.tool_calls
+        if flags.stream:
+            response = collect_streaming_response(response_raw)
         else:
-            fmt = "none"
-            tool_calls = []
+            response = response_raw
 
-        turn_formats.append(fmt)
+        layers = extract_layers(response)
+        tool_calls = layers.best_tool_calls
+
+        turn_formats.append(layers.classification)
         turn_details.append({
             "turn": turn_idx + 1,
             "city": city,
-            "format": fmt,
+            "classification": layers.classification,
             "num_tool_calls": len(tool_calls),
             "tool_names": [tc.name for tc in tool_calls],
-            "raw_content_preview": (native_result.raw_content or text_result.raw_content or "")[:200],
+            "content_preview": layers.content[:200] if layers.content else "",
         })
 
         # Add assistant message to conversation
-        if hasattr(response, "message"):
-            msg = response.message
-            assistant_msg: dict = {"role": "assistant"}
-            if hasattr(msg, "content") and msg.content:
-                assistant_msg["content"] = msg.content
-            else:
-                assistant_msg["content"] = ""
-            if native_result.success and hasattr(msg, "tool_calls") and msg.tool_calls:
-                assistant_msg["tool_calls"] = [
-                    {"function": {"name": tc.name, "arguments": tc.arguments}}
-                    for tc in tool_calls
-                ]
-            messages.append(assistant_msg)
-        else:
-            messages.append({"role": "assistant", "content": ""})
+        assistant_msg: dict = {"role": "assistant", "content": layers.content or ""}
+        if layers.classification == "native" and layers.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {"function": {"name": tc.name, "arguments": tc.arguments}}
+                for tc in layers.tool_calls
+            ]
+        messages.append(assistant_msg)
 
         # Feed tool result back (if tool was called)
         if tool_calls:
@@ -115,17 +102,19 @@ def run(model: str) -> TestResult:
     # Analyze results
     notes_parts: list[str] = []
 
-    # Check for format switching
-    unique_formats = set(f for f in turn_formats if f != "none")
-    format_switched = len(unique_formats) > 1
+    # Check for format switching (ignore "none" turns)
+    active_formats = set(f for f in turn_formats if f != "none")
+    format_switched = len(active_formats) > 1
 
     if format_switched:
         notes_parts.append(f"FORMAT SWITCH DETECTED: {turn_formats}")
         native_or_text = "mixed"
-    elif "native" in unique_formats:
+    elif "native" in active_formats:
         native_or_text = "native"
-    elif "text" in unique_formats:
+    elif "text" in active_formats:
         native_or_text = "text"
+    elif "misrouted" in active_formats:
+        native_or_text = "misrouted"
     else:
         native_or_text = "none"
         notes_parts.append("No tool calls in any turn")
@@ -134,6 +123,9 @@ def run(model: str) -> TestResult:
     successful_turns = sum(1 for f in turn_formats if f != "none")
     notes_parts.append(f"Successful turns: {successful_turns}/5")
     notes_parts.append(f"Turn formats: {turn_formats}")
+
+    # Overall classification: most common active format
+    classification = native_or_text if native_or_text != "mixed" else "mixed"
 
     # A model passes if all 5 turns produce tool calls and format is consistent
     passed = successful_turns == 5 and not format_switched
@@ -144,6 +136,9 @@ def run(model: str) -> TestResult:
         passed=passed,
         native_or_text=native_or_text,
         parse_success=successful_turns > 0,
+        stream=flags.stream,
+        think=flags.think,
+        classification=classification,
         notes="; ".join(notes_parts),
         details={
             "turn_formats": turn_formats,

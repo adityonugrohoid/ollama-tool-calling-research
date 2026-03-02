@@ -2,14 +2,17 @@
 """Entry point for running the Ollama tool calling research test suite.
 
 Usage:
-    # Run all tests against P0 models (default)
+    # Run all tests against P0 models (default, all 4 flag combos)
     python run_all.py
 
     # Run specific tests against specific models
-    python run_all.py --models qwen3:8b,llama3.1:8b --tests test_single_tool,test_multi_tool
+    python run_all.py --models gpt-oss:20b,ministral-3:8b --tests single_tool,multi_tool
 
-    # Run all tests against a single model
-    python run_all.py --models qwen3:8b
+    # Run only baseline flag combo
+    python run_all.py --flags S0T0
+
+    # Run specific flag combos
+    python run_all.py --flags S0T0,S0T1
 
     # Run all tests against all models
     python run_all.py --models all
@@ -26,7 +29,7 @@ from src.test_runner import (
     print_summary_table,
     save_summary,
 )
-from tests.config import P0_MODELS, ALL_MODELS
+from tests.config import P0_MODELS, ALL_MODELS, FlagCombo, ALL_FLAG_COMBOS
 
 # Import all test modules
 from tests import (
@@ -34,29 +37,26 @@ from tests import (
     test_multi_tool,
     test_parallel_calls,
     test_multi_step,
-    test_streaming_tools,
     test_tool_count_scaling,
-    test_thinking_with_tools,
-    test_text_fallback,
     test_voxel_tools,
     test_voxel_tools_text,
 )
 
 console = Console()
 
-# Registry of all available tests
+# Registry of all available tests (7 core tests)
 ALL_TESTS: dict[str, TestFunction] = {
-    "test_single_tool": test_single_tool.run,
-    "test_multi_tool": test_multi_tool.run,
-    "test_parallel_calls": test_parallel_calls.run,
-    "test_multi_step": test_multi_step.run,
-    "test_streaming_tools": test_streaming_tools.run,
-    "test_tool_count_scaling": test_tool_count_scaling.run,
-    "test_thinking_with_tools": test_thinking_with_tools.run,
-    "test_text_fallback": test_text_fallback.run,
-    "test_voxel_tools": test_voxel_tools.run,
-    "test_voxel_tools_text": test_voxel_tools_text.run,
+    "single_tool": test_single_tool.run,
+    "multi_tool": test_multi_tool.run,
+    "parallel_calls": test_parallel_calls.run,
+    "multi_step": test_multi_step.run,
+    "tool_count_scaling": test_tool_count_scaling.run,
+    "voxel_tools": test_voxel_tools.run,
+    "voxel_tools_text": test_voxel_tools_text.run,
 }
+
+# Lookup for flag combos by label
+FLAG_COMBO_LOOKUP: dict[str, FlagCombo] = {fc.label: fc for fc in ALL_FLAG_COMBOS}
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +74,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Comma-separated list of test names (default: all tests).",
+    )
+    parser.add_argument(
+        "--flags",
+        type=str,
+        default=None,
+        help="Comma-separated list of flag combos: S0T0,S0T1,S1T0,S1T1 (default: all 4).",
     )
     return parser.parse_args()
 
@@ -104,21 +110,40 @@ def main() -> int:
             console.print("[red]No valid tests selected.[/red]")
             return 1
 
+    # Resolve flag combos
+    if args.flags is None:
+        flag_combos = ALL_FLAG_COMBOS
+    else:
+        flag_labels = [f.strip().upper() for f in args.flags.split(",") if f.strip()]
+        flag_combos = []
+        for label in flag_labels:
+            if label in FLAG_COMBO_LOOKUP:
+                flag_combos.append(FLAG_COMBO_LOOKUP[label])
+            else:
+                console.print(f"[yellow]Warning: Unknown flag combo '{label}', skipping[/yellow]")
+        if not flag_combos:
+            console.print("[red]No valid flag combos selected.[/red]")
+            return 1
+
     # Print header
     console.rule("[bold green]Ollama Tool Calling Research[/bold green]")
     console.print(f"[bold]Models:[/bold] {', '.join(models)}")
     console.print(f"[bold]Tests:[/bold] {', '.join(selected_tests.keys())}")
+    combo_labels = ", ".join(fc.label for fc in flag_combos)
+    console.print(f"[bold]Flags:[/bold] {combo_labels}")
+    total = len(models) * len(selected_tests) * len(flag_combos)
+    console.print(f"[bold]Total runs:[/bold] {total}")
     console.print()
 
     # Run tests
-    results = run_tests(selected_tests, models)
+    results = run_tests(selected_tests, models, flag_combos)
 
     # Print summary
     test_names_list = list(selected_tests.keys())
-    print_summary_table(results, models, test_names_list)
+    print_summary_table(results, models, test_names_list, flag_combos)
 
     # Save summary
-    save_summary(results, models, test_names_list)
+    save_summary(results, models, test_names_list, flag_combos)
 
     # Return exit code based on results
     failed = sum(

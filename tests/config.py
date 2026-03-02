@@ -1,11 +1,31 @@
 """Shared test configuration: model lists, tool definitions, default options."""
 
+from dataclasses import dataclass
+
 # Reproducible test options
 DEFAULT_OPTIONS: dict = {
     "temperature": 0,
     "seed": 42,
     "num_ctx": 4096,
 }
+
+
+# ─── Flag Matrix ───────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class FlagCombo:
+    """A combination of stream and think flags for a test run."""
+    stream: bool
+    think: bool
+    label: str  # "S0T0", "S0T1", "S1T0", "S1T1"
+
+
+ALL_FLAG_COMBOS: list[FlagCombo] = [
+    FlagCombo(stream=False, think=False, label="S0T0"),
+    FlagCombo(stream=False, think=True, label="S0T1"),
+    FlagCombo(stream=True, think=False, label="S1T0"),
+    FlagCombo(stream=True, think=True, label="S1T1"),
+]
 
 # Model priority tiers (based on actual Ollama Cloud availability)
 # Source: model-library.json fetched from https://ollama.com/api/tags

@@ -1,4 +1,4 @@
-"""Test 9: Real-world voxel arena tools.
+"""Test 6: Real-world voxel arena tools.
 
 Provides 4 tools with real-world complexity: integer constraints (min/max),
 enum types (12 block types), zero-parameter tools, and mixed signatures.
@@ -13,8 +13,9 @@ Sub-checks:
 """
 
 from src.ollama_client import chat
-from src.tool_parser_native import parse_native, validate_arguments
-from src.tool_parser_text import parse_text
+from src.tool_parser_native import validate_arguments
+from src.response_layers import extract_layers
+from src.stream_collector import collect_streaming_response
 from src.test_runner import TestResult
 from tests.config import (
     DEFAULT_OPTIONS,
@@ -22,10 +23,11 @@ from tests.config import (
     TOOL_PLACE_BLOCK,
     TOOL_REMOVE_BLOCK,
     TOOL_GET_WORLD_STATE,
+    FlagCombo,
 )
 
 
-TEST_NAME = "test_voxel_tools"
+TEST_NAME = "voxel_tools"
 
 SUB_CHECKS: list[dict] = [
     {
@@ -84,28 +86,34 @@ SUB_CHECKS: list[dict] = [
 ]
 
 
-def _run_sub_check(model: str, check: dict) -> tuple[bool, str]:
+def _run_sub_check(model: str, check: dict, flags: FlagCombo) -> tuple[bool, str]:
     """Run a single sub-check. Returns (passed, notes)."""
     messages = [{"role": "user", "content": check["prompt"]}]
 
-    response = chat(
-        model=model,
-        messages=messages,
-        test_name=f"{TEST_NAME}_{check['name']}",
-        tools=VOXEL_TOOLS,
-        stream=False,
-        options=DEFAULT_OPTIONS,
-    )
+    try:
+        response_raw = chat(
+            model=model,
+            messages=messages,
+            test_name=f"{TEST_NAME}_{check['name']}",
+            tools=VOXEL_TOOLS,
+            stream=flags.stream,
+            options=DEFAULT_OPTIONS,
+            think=True if flags.think else None,
+        )
 
-    # Try native parsing first, fall back to text
-    result = parse_native(response)
-    if not result.success:
-        result = parse_text(response)
+        if flags.stream:
+            response = collect_streaming_response(response_raw)
+        else:
+            response = response_raw
 
-    if not result.success:
-        return False, f"no tool calls ({result.error})"
+        layers = extract_layers(response)
+    except Exception as e:
+        return False, f"error: {type(e).__name__}: {e}"
 
-    tc = result.tool_calls[0]
+    if not layers.has_tool_calls:
+        return False, f"no tool calls ({layers.classification})"
+
+    tc = layers.best_tool_calls[0]
 
     # Check correct tool name
     if tc.name != check["expected_tool"]:
@@ -120,15 +128,15 @@ def _run_sub_check(model: str, check: dict) -> tuple[bool, str]:
     if not check["extra_validate"](tc):
         return False, f"expected {check['extra_desc']}, got {tc.arguments}"
 
-    return True, f"{tc.name}({tc.arguments}) via {result.format_type}"
+    return True, f"{tc.name}({tc.arguments}) via {layers.classification}"
 
 
-def run(model: str) -> TestResult:
+def run(model: str, flags: FlagCombo) -> TestResult:
     """Run voxel tools test against a model. Pass = all 5 sub-checks pass."""
     sub_results: dict[str, tuple[bool, str]] = {}
 
     for check in SUB_CHECKS:
-        passed, notes = _run_sub_check(model, check)
+        passed, notes = _run_sub_check(model, check, flags)
         sub_results[check["name"]] = (passed, notes)
 
     all_passed = all(p for p, _ in sub_results.values())
@@ -143,8 +151,11 @@ def run(model: str) -> TestResult:
         model=model,
         test_name=TEST_NAME,
         passed=all_passed,
-        native_or_text="native",  # Will reflect first sub-check; details has per-check info
+        native_or_text="native",
         parse_success=True,
+        stream=flags.stream,
+        think=flags.think,
+        classification="native",
         notes=notes,
         details={
             name: {"passed": p, "notes": n}

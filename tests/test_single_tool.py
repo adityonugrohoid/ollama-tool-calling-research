@@ -9,50 +9,55 @@ Verifies:
 """
 
 from src.ollama_client import chat
-from src.tool_parser_native import parse_native, validate_arguments
-from src.tool_parser_text import parse_text
+from src.tool_parser_native import validate_arguments
+from src.response_layers import extract_layers
+from src.stream_collector import collect_streaming_response
 from src.test_runner import TestResult
-from tests.config import DEFAULT_OPTIONS, TOOL_GET_WEATHER
+from tests.config import DEFAULT_OPTIONS, TOOL_GET_WEATHER, FlagCombo
 
 
-TEST_NAME = "test_single_tool"
+TEST_NAME = "single_tool"
 
 PROMPT = "What is the current weather in Tokyo?"
 
 
-def run(model: str) -> TestResult:
+def run(model: str, flags: FlagCombo) -> TestResult:
     """Run single tool test against a model."""
     messages = [{"role": "user", "content": PROMPT}]
     tools = [TOOL_GET_WEATHER]
 
-    response = chat(
+    response_raw = chat(
         model=model,
         messages=messages,
         test_name=TEST_NAME,
         tools=tools,
-        stream=False,
+        stream=flags.stream,
         options=DEFAULT_OPTIONS,
+        think=True if flags.think else None,
     )
 
-    # Try native parsing first
-    result = parse_native(response)
+    if flags.stream:
+        response = collect_streaming_response(response_raw)
+    else:
+        response = response_raw
 
-    # Fall back to text parsing
-    if not result.success:
-        result = parse_text(response)
+    layers = extract_layers(response)
 
-    if not result.success:
+    if not layers.has_tool_calls:
         return TestResult(
             model=model,
             test_name=TEST_NAME,
             passed=False,
-            native_or_text=result.format_type,
+            native_or_text=layers.classification,
             parse_success=False,
-            notes=result.error or "No tool calls found",
+            stream=flags.stream,
+            think=flags.think,
+            classification=layers.classification,
+            notes="No tool calls found",
         )
 
     # Validate the tool call
-    tc = result.tool_calls[0]
+    tc = layers.best_tool_calls[0]
     notes_parts: list[str] = []
 
     # Check correct tool name
@@ -77,8 +82,11 @@ def run(model: str) -> TestResult:
         model=model,
         test_name=TEST_NAME,
         passed=passed,
-        native_or_text=result.format_type,
+        native_or_text=layers.classification,
         parse_success=True,
+        stream=flags.stream,
+        think=flags.think,
+        classification=layers.classification,
         notes="; ".join(notes_parts) if notes_parts else f"Tool: {tc.name}, City: {city}",
         details={
             "tool_name": tc.name,
@@ -86,5 +94,6 @@ def run(model: str) -> TestResult:
             "source": tc.source,
             "schema_valid": is_valid,
             "schema_issues": issues,
+            "classification": layers.classification,
         },
     )
