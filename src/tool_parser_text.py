@@ -15,6 +15,41 @@ from typing import Any
 from src.tool_parser_native import ParseResult, ToolCall
 
 
+def parse_text_from_string(text: str) -> list[ToolCall]:
+    """Parse tool calls from a raw text string.
+
+    Tries multiple strategies in order:
+    1. XML-delimited: <tool_call>{"name": ..., "arguments": ...}</tool_call>
+    2. Markdown code blocks containing tool call JSON
+    3. Raw JSON objects with "name" and "arguments" keys
+
+    Args:
+        text: Raw text that may contain tool calls.
+
+    Returns:
+        List of ToolCall objects (may be empty).
+    """
+    if not text or not text.strip():
+        return []
+
+    # Strategy 1: XML-delimited tool calls
+    tool_calls = _parse_xml_tool_calls(text)
+    if tool_calls:
+        return tool_calls
+
+    # Strategy 2: Markdown code blocks
+    tool_calls = _parse_markdown_tool_calls(text)
+    if tool_calls:
+        return tool_calls
+
+    # Strategy 3: Raw JSON detection
+    tool_calls = _parse_raw_json_tool_calls(text)
+    if tool_calls:
+        return tool_calls
+
+    return []
+
+
 def parse_text(response: Any) -> ParseResult:
     """Parse tool calls from text content in an Ollama response.
 
@@ -49,28 +84,8 @@ def parse_text(response: Any) -> ParseResult:
             raw_content=content or "",
         )
 
-    # Strategy 1: XML-delimited tool calls
-    tool_calls = _parse_xml_tool_calls(content)
-    if tool_calls:
-        return ParseResult(
-            success=True,
-            tool_calls=tool_calls,
-            format_type="text",
-            raw_content=content,
-        )
+    tool_calls = parse_text_from_string(content)
 
-    # Strategy 2: Markdown code blocks
-    tool_calls = _parse_markdown_tool_calls(content)
-    if tool_calls:
-        return ParseResult(
-            success=True,
-            tool_calls=tool_calls,
-            format_type="text",
-            raw_content=content,
-        )
-
-    # Strategy 3: Raw JSON detection
-    tool_calls = _parse_raw_json_tool_calls(content)
     if tool_calls:
         return ParseResult(
             success=True,

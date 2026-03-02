@@ -1,17 +1,18 @@
-"""Test 10: Voxel arena tools via text-based fallback.
+"""Test 7: Voxel arena tools via text-based fallback.
 
 Same 5 sub-checks as test_voxel_tools but uses prompt-level instructions
 (no native `tools` parameter). Tests whether text-based tool calling can
 handle real-world tool complexity: enums, integer constraints, zero-param
 tools, and tool discrimination.
 
-Comparing Test 9 (native) vs Test 10 (text) reveals whether text-based
+Comparing Test 6 (native) vs Test 7 (text) reveals whether text-based
 tool calling is a viable uniform solution across all models.
 """
 
 from src.ollama_client import chat
 from src.tool_parser_native import validate_arguments
-from src.tool_parser_text import parse_text
+from src.response_layers import extract_layers
+from src.stream_collector import collect_streaming_response
 from src.test_runner import TestResult
 from tests.config import (
     DEFAULT_OPTIONS,
@@ -19,11 +20,12 @@ from tests.config import (
     TOOL_PLACE_BLOCK,
     TOOL_REMOVE_BLOCK,
     TOOL_GET_WORLD_STATE,
+    FlagCombo,
     build_text_tool_system_prompt,
 )
 
 
-TEST_NAME = "test_voxel_tools_text"
+TEST_NAME = "voxel_tools_text"
 
 SYSTEM_PROMPT = build_text_tool_system_prompt(VOXEL_TOOLS)
 
@@ -84,29 +86,37 @@ SUB_CHECKS: list[dict] = [
 ]
 
 
-def _run_sub_check(model: str, check: dict) -> tuple[bool, str]:
+def _run_sub_check(model: str, check: dict, flags: FlagCombo) -> tuple[bool, str]:
     """Run a single text-mode sub-check. Returns (passed, notes)."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": check["prompt"]},
     ]
 
-    response = chat(
-        model=model,
-        messages=messages,
-        test_name=f"{TEST_NAME}_{check['name']}",
-        tools=None,  # No native tools — text-based only
-        stream=False,
-        options=DEFAULT_OPTIONS,
-    )
+    try:
+        response_raw = chat(
+            model=model,
+            messages=messages,
+            test_name=f"{TEST_NAME}_{check['name']}",
+            tools=None,  # No native tools — text-based only
+            stream=flags.stream,
+            options=DEFAULT_OPTIONS,
+            think=True if flags.think else None,
+        )
 
-    # Text parsing only
-    result = parse_text(response)
+        if flags.stream:
+            response = collect_streaming_response(response_raw)
+        else:
+            response = response_raw
 
-    if not result.success:
-        return False, f"no tool calls ({result.error})"
+        layers = extract_layers(response)
+    except Exception as e:
+        return False, f"error: {type(e).__name__}: {e}"
 
-    tc = result.tool_calls[0]
+    if not layers.has_tool_calls:
+        return False, f"no tool calls ({layers.classification})"
+
+    tc = layers.best_tool_calls[0]
 
     # Check correct tool name
     if tc.name != check["expected_tool"]:
@@ -121,15 +131,15 @@ def _run_sub_check(model: str, check: dict) -> tuple[bool, str]:
     if not check["extra_validate"](tc):
         return False, f"expected {check['extra_desc']}, got {tc.arguments}"
 
-    return True, f"{tc.name}({tc.arguments}) via text"
+    return True, f"{tc.name}({tc.arguments}) via {layers.classification}"
 
 
-def run(model: str) -> TestResult:
+def run(model: str, flags: FlagCombo) -> TestResult:
     """Run voxel tools text fallback test. Pass = all 5 sub-checks pass."""
     sub_results: dict[str, tuple[bool, str]] = {}
 
     for check in SUB_CHECKS:
-        passed, notes = _run_sub_check(model, check)
+        passed, notes = _run_sub_check(model, check, flags)
         sub_results[check["name"]] = (passed, notes)
 
     all_passed = all(p for p, _ in sub_results.values())
@@ -146,6 +156,9 @@ def run(model: str) -> TestResult:
         passed=all_passed,
         native_or_text="text",
         parse_success=any(p for p, _ in sub_results.values()),
+        stream=flags.stream,
+        think=flags.think,
+        classification="text",
         notes=notes,
         details={
             name: {"passed": p, "notes": n}

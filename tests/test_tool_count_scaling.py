@@ -1,71 +1,68 @@
-"""Test 6: Tool count scaling (1, 3, 5, 8, 10, 15 tools).
+"""Test 5: Tool count scaling (1, 3, 5, 8, 10, 15 tools).
 
 Same prompt but with increasing numbers of tool definitions.
-Logs format (native vs text) and parse success at each count.
+Logs classification and parse success at each count.
 Detects the threshold where models switch from native to text output.
 """
 
 from src.ollama_client import chat
-from src.tool_parser_native import parse_native
-from src.tool_parser_text import parse_text
+from src.response_layers import extract_layers
+from src.stream_collector import collect_streaming_response
 from src.test_runner import TestResult
-from tests.config import DEFAULT_OPTIONS, generate_dummy_tools
+from tests.config import DEFAULT_OPTIONS, generate_dummy_tools, FlagCombo
 
 
-TEST_NAME = "test_tool_count_scaling"
+TEST_NAME = "tool_count_scaling"
 
 PROMPT = "What is the current weather in Tokyo?"
 
 TOOL_COUNTS = [1, 3, 5, 8, 10, 15]
 
 
-def run(model: str) -> TestResult:
+def run(model: str, flags: FlagCombo) -> TestResult:
     """Run tool count scaling test across multiple tool counts."""
     messages = [{"role": "user", "content": PROMPT}]
 
     scale_results: list[dict] = []
     notes_parts: list[str] = []
-    formats_seen: list[str] = []
+    classifications_seen: list[str] = []
     all_parsed = True
 
     for count in TOOL_COUNTS:
         tools = generate_dummy_tools(count)
 
-        response = chat(
+        response_raw = chat(
             model=model,
             messages=messages,
             test_name=f"{TEST_NAME}_{count}tools",
             tools=tools,
-            stream=False,
+            stream=flags.stream,
             options=DEFAULT_OPTIONS,
+            think=True if flags.think else None,
         )
 
-        # Try native first, then text
-        native_result = parse_native(response)
-        text_result = parse_text(response)
+        if flags.stream:
+            response = collect_streaming_response(response_raw)
+        else:
+            response = response_raw
 
-        if native_result.success:
-            fmt = "native"
-            tool_calls = native_result.tool_calls
-            parsed = True
-        elif text_result.success:
-            fmt = "text"
-            tool_calls = text_result.tool_calls
+        layers = extract_layers(response)
+        tool_calls = layers.best_tool_calls
+
+        if layers.has_tool_calls:
             parsed = True
         else:
-            fmt = "none"
-            tool_calls = []
             parsed = False
             all_parsed = False
 
-        formats_seen.append(fmt)
+        classifications_seen.append(layers.classification)
 
         # Check if correct tool was called (get_weather)
         correct_tool = any(tc.name == "get_weather" for tc in tool_calls) if tool_calls else False
 
         scale_results.append({
             "tool_count": count,
-            "format": fmt,
+            "classification": layers.classification,
             "parse_success": parsed,
             "correct_tool": correct_tool,
             "num_calls": len(tool_calls),
@@ -73,29 +70,36 @@ def run(model: str) -> TestResult:
         })
 
     # Analyze scaling behavior
-    unique_formats = set(f for f in formats_seen if f != "none")
-    format_switched = len(unique_formats) > 1
+    active_classifications = set(c for c in classifications_seen if c != "none")
+    format_switched = len(active_classifications) > 1
 
     if format_switched:
         # Find the switch point
-        for i in range(1, len(formats_seen)):
-            if formats_seen[i] != formats_seen[i - 1] and formats_seen[i] != "none":
+        for i in range(1, len(classifications_seen)):
+            if classifications_seen[i] != classifications_seen[i - 1] and classifications_seen[i] != "none":
                 notes_parts.append(
                     f"FORMAT SWITCH at {TOOL_COUNTS[i]} tools: "
-                    f"{formats_seen[i - 1]} -> {formats_seen[i]}"
+                    f"{classifications_seen[i - 1]} -> {classifications_seen[i]}"
                 )
                 break
         native_or_text = "mixed"
-    elif "native" in unique_formats:
+        classification = "mixed"
+    elif "native" in active_classifications:
         native_or_text = "native"
-    elif "text" in unique_formats:
+        classification = "native"
+    elif "text" in active_classifications:
         native_or_text = "text"
+        classification = "text"
+    elif "misrouted" in active_classifications:
+        native_or_text = "misrouted"
+        classification = "misrouted"
     else:
         native_or_text = "none"
+        classification = "none"
 
     # Build scale summary
     scale_summary = " | ".join(
-        f"{TOOL_COUNTS[i]}:{formats_seen[i]}" for i in range(len(TOOL_COUNTS))
+        f"{TOOL_COUNTS[i]}:{classifications_seen[i]}" for i in range(len(TOOL_COUNTS))
     )
     notes_parts.append(f"Scale: [{scale_summary}]")
 
@@ -113,10 +117,13 @@ def run(model: str) -> TestResult:
         passed=passed,
         native_or_text=native_or_text,
         parse_success=all_parsed,
+        stream=flags.stream,
+        think=flags.think,
+        classification=classification,
         notes="; ".join(notes_parts),
         details={
             "scale_results": scale_results,
             "format_switched": format_switched,
-            "formats_seen": formats_seen,
+            "classifications_seen": classifications_seen,
         },
     )
