@@ -195,16 +195,22 @@ def generate_dummy_tools(count: int) -> list[dict]:
 
 # ─── Text-Based Tool Calling Prompts ────────────────────────────────
 
-TEXT_TOOL_SYSTEM_PROMPT = """You have access to the following tools. When you need to use a tool, output your tool call in XML format:
+_TEXT_TOOL_SYSTEM_TEMPLATE = """You have access to the following tools. When you need to use a tool, output your tool call in XML format:
 
 <tool_call>
 {"name": "TOOL_NAME", "arguments": {"arg1": "value1"}}
 </tool_call>
 
 Available tools:
-{tool_descriptions}
+$TOOL_DESCRIPTIONS
 
 Important: Always use the exact XML format shown above for tool calls. Do not use any other format."""
+
+
+def build_text_tool_system_prompt(tools: list[dict]) -> str:
+    """Build the system prompt for text-based tool calling."""
+    descriptions = format_text_tool_descriptions(tools)
+    return _TEXT_TOOL_SYSTEM_TEMPLATE.replace("$TOOL_DESCRIPTIONS", descriptions)
 
 
 def format_text_tool_descriptions(tools: list[dict]) -> str:

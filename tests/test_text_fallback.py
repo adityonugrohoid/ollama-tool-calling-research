@@ -12,8 +12,7 @@ from src.test_runner import TestResult
 from tests.config import (
     DEFAULT_OPTIONS,
     TOOL_GET_WEATHER,
-    TEXT_TOOL_SYSTEM_PROMPT,
-    format_text_tool_descriptions,
+    build_text_tool_system_prompt,
 )
 
 
@@ -28,8 +27,7 @@ REPETITIONS = 3
 def run(model: str) -> TestResult:
     """Run text-based tool calling baseline test."""
     tools = [TOOL_GET_WEATHER]
-    tool_descriptions = format_text_tool_descriptions(tools)
-    system_prompt = TEXT_TOOL_SYSTEM_PROMPT.format(tool_descriptions=tool_descriptions)
+    system_prompt = build_text_tool_system_prompt(tools)
 
     successes = 0
     failures = 0
