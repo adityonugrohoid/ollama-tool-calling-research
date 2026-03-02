@@ -96,12 +96,25 @@ Each response is classified into one of three format types:
 - **Known issue tested:** #7 (text-as-JSON malformation)
 - Runs 3 repetitions to measure reliability
 
+### 9. Voxel Arena Tools (`test_voxel_tools.py`)
+- **What:** 4 real-world tools from voxel arena with complex schemas: integer constraints (min/max 0-15), enum types (12 block types), zero-parameter tools, mixed signatures (0-4 params)
+- **Validates:** Whether tool calling mechanics hold up with real-world tool complexity
+- **5 sub-checks:**
+  - `tool_selection` — correct tool from 4 options, all 4 params valid
+  - `enum_adherence` — block type is exactly a valid enum value
+  - `integer_constraints` — coordinates are ints within 0-15 range
+  - `zero_param_tool` — calls getWorldState with empty args
+  - `tool_discrimination` — calls removeBlock not placeBlock
+- Pass = all 5 sub-checks pass; each is a single independent API call
+
 ## Schema Validation
 
 All tool call arguments are validated against the provided tool schema:
 - Required arguments must be present
 - No hallucinated (extra) arguments allowed
 - Type checking where possible (string, number, integer, boolean)
+- Enum validation: values must be in the schema's allowed list
+- Range validation: numeric values must satisfy minimum/maximum constraints
 
 ## Output
 

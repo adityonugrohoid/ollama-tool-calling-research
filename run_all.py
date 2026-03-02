@@ -38,6 +38,7 @@ from tests import (
     test_tool_count_scaling,
     test_thinking_with_tools,
     test_text_fallback,
+    test_voxel_tools,
 )
 
 console = Console()
@@ -52,6 +53,7 @@ ALL_TESTS: dict[str, TestFunction] = {
     "test_tool_count_scaling": test_tool_count_scaling.run,
     "test_thinking_with_tools": test_thinking_with_tools.run,
     "test_text_fallback": test_text_fallback.run,
+    "test_voxel_tools": test_voxel_tools.run,
 }
 
 

@@ -127,7 +127,8 @@ def validate_arguments(
     # Check types where possible
     for arg_name, arg_value in tool_call.arguments.items():
         if arg_name in properties:
-            expected_type = properties[arg_name].get("type")
+            prop_schema = properties[arg_name]
+            expected_type = prop_schema.get("type")
             if expected_type == "string" and not isinstance(arg_value, str):
                 issues.append(f"Wrong type for {arg_name}: expected string, got {type(arg_value).__name__}")
             elif expected_type == "number" and not isinstance(arg_value, (int, float)):
@@ -136,5 +137,22 @@ def validate_arguments(
                 issues.append(f"Wrong type for {arg_name}: expected integer, got {type(arg_value).__name__}")
             elif expected_type == "boolean" and not isinstance(arg_value, bool):
                 issues.append(f"Wrong type for {arg_name}: expected boolean, got {type(arg_value).__name__}")
+
+            # Enum validation
+            if "enum" in prop_schema and arg_value not in prop_schema["enum"]:
+                issues.append(
+                    f"Invalid enum value for {arg_name}: {arg_value!r} not in {prop_schema['enum']}"
+                )
+
+            # Minimum/maximum validation (only for numeric types)
+            if isinstance(arg_value, (int, float)) and not isinstance(arg_value, bool):
+                if "minimum" in prop_schema and arg_value < prop_schema["minimum"]:
+                    issues.append(
+                        f"Value too low for {arg_name}: {arg_value} < minimum {prop_schema['minimum']}"
+                    )
+                if "maximum" in prop_schema and arg_value > prop_schema["maximum"]:
+                    issues.append(
+                        f"Value too high for {arg_name}: {arg_value} > maximum {prop_schema['maximum']}"
+                    )
 
     return len(issues) == 0, issues
