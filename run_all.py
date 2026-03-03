@@ -29,7 +29,10 @@ from src.test_runner import (
     print_summary_table,
     save_summary,
 )
-from tests.config import P0_MODELS, ALL_MODELS, FlagCombo, ALL_FLAG_COMBOS
+from tests.config import (
+    GA_MODELS, GB_MODELS, GC_MODELS, GD_MODELS,
+    ALL_MODELS, FlagCombo, ALL_FLAG_COMBOS,
+)
 
 # Import all test modules
 from tests import (
@@ -67,7 +70,7 @@ def parse_args() -> argparse.Namespace:
         "--models",
         type=str,
         default=None,
-        help="Comma-separated list of model names (default: P0 models). Use 'all' for all models.",
+        help="Comma-separated list of model names, or group shorthand: ga/gb/gc/gd/all (default: ga).",
     )
     parser.add_argument(
         "--tests",
@@ -88,10 +91,14 @@ def main() -> int:
     args = parse_args()
 
     # Resolve models
+    GROUP_LOOKUP: dict[str, list[str]] = {
+        "ga": GA_MODELS, "gb": GB_MODELS, "gc": GC_MODELS, "gd": GD_MODELS,
+        "all": ALL_MODELS,
+    }
     if args.models is None:
-        models = P0_MODELS
-    elif args.models.strip().lower() == "all":
-        models = ALL_MODELS
+        models = GA_MODELS
+    elif args.models.strip().lower() in GROUP_LOOKUP:
+        models = GROUP_LOOKUP[args.models.strip().lower()]
     else:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
 
