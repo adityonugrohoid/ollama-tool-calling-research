@@ -27,52 +27,56 @@ ALL_FLAG_COMBOS: list[FlagCombo] = [
     FlagCombo(stream=True, think=True, label="S1T1"),
 ]
 
-# Model priority tiers (based on actual Ollama Cloud availability)
-# Source: model-library.json fetched from https://ollama.com/api/tags
-# Total: 32 models — 29 with tools, 3 without (gemma3 family)
+# Model groups (based on flag matrix sweep + rerun results)
+# Source: observations/summaries/model_groups.md
+# Total: 32 models — grouped by native/text layer pass patterns
 
-# P0: Small/fast models, <30B — best for quick iteration
-P0_MODELS: list[str] = [
-    "ministral-3:3b",        #  3B, tools+vision — Mistral, smallest stress test
-    "gemma3:4b",             #  4B, vision only — NO tools, baseline comparison
+# Group A: All P (60/60) — native 40/40 P, text 20/20 P
+GA_MODELS: list[str] = [
+    "ministral-3:3b",        #  3B, tools+vision — Mistral
     "ministral-3:8b",        #  8B, tools+vision — Mistral
-    "rnj-1:8b",              #  8B, tools — Gemma3 family
-    "gemma3:12b",            # 12B, vision only — NO tools, baseline comparison
-    "gpt-oss:20b",           # 20B, tools+thinking — GPT-OSS
-    "ministral-3:14b",       # 14B, tools+vision — Mistral mid-size
-    "devstral-small-2:24b",  # 24B, tools+vision — Mistral coding model
-    "gemma3:27b",            # 27B, vision only — NO tools, baseline comparison
-]
-
-# P1: Medium models, 30B–130B — deeper investigation
-P1_MODELS: list[str] = [
-    "nemotron-3-nano:30b",   # 30B, tools+thinking — Nvidia
-    "qwen3-next:80b",        # 80B, tools+thinking — Qwen (key for mid-conv switching)
-    "qwen3-coder-next",      # 80B, tools — Qwen coding model
-    "gpt-oss:120b",          # 120B, tools+thinking — large GPT-OSS
-    "devstral-2:123b",       # 123B, tools — Mistral large coding model
+    "ministral-3:14b",       # 14B, tools+vision — Mistral
+    "devstral-2:123b",       # 123B, tools — Mistral coding model
     "gemini-3-flash-preview", # unknown, tools+thinking — Google
-]
-
-# P2: Large models, 200B+ — comprehensive coverage
-P2_MODELS: list[str] = [
-    "minimax-m2",            # 230B, tools
-    "minimax-m2.1",          # 230B, tools+thinking
-    "minimax-m2.5",          # 230B, tools+thinking
-    "qwen3.5:397b",          # 397B, tools+thinking+vision
-    "qwen3-vl:235b",         # 235B, tools+thinking+vision
-    "qwen3-vl:235b-instruct",# 235B, tools+vision
-    "qwen3-coder:480b",      # 480B, tools — Qwen coder
-    "mistral-large-3:675b",  # 675B, tools+vision — largest Mistral
-    "deepseek-v3.1:671b",    # 671B, tools+thinking
     "cogito-2.1:671b",       # 671B, tools+thinking
-    "deepseek-v3.2",         # 671B, tools+thinking
-    "glm-4.6",               # 357B, tools+thinking
-    "glm-4.7",               # 357B, tools+thinking
-    "glm-5",                 # 756B, tools+thinking
-    "kimi-k2:1t",            # 1T, tools
     "kimi-k2.5",             # 1T, tools+thinking+vision
     "kimi-k2-thinking",      # 1T, tools+thinking
+    "minimax-m2",            # 230B, tools — migrated from B after rerun
+    "kimi-k2:1t",            # 1T, tools — migrated from B after rerun
+]
+
+# Group B: All native P (40/40), text varies — native perfect, text has confirmed F
+GB_MODELS: list[str] = [
+    "minimax-m2.1",          # 230B, tools+thinking — vt_zero PFFF
+    "minimax-m2.5",          # 230B, tools+thinking — vt_zero FFPF
+    "glm-4.6",              # 357B, tools+thinking — text 9/20
+    "nemotron-3-nano:30b",   # 30B, tools+thinking — text 7/20
+    "glm-5",                 # 756B, tools+thinking — text 3/20
+    "glm-4.7",              # 357B, tools+thinking — text 2/20
+    "qwen3-coder-next",      # 80B, tools — text 0/20 (confirmed F after rerun)
+    "qwen3-coder:480b",      # 480B, tools — text 0/20 (confirmed F after rerun)
+]
+
+# Group C: All text P (20/20), native varies — text perfect, native has confirmed F
+GC_MODELS: list[str] = [
+    "qwen3-vl:235b-instruct",# 235B, tools+vision — native 37/40
+    "devstral-small-2:24b",  # 24B, tools+vision — native 36/40 (v_int FFFF)
+    "mistral-large-3:675b",  # 675B, tools+vision — native 36/40 (v_int FFFF)
+    "gpt-oss:120b",          # 120B, tools+thinking — native 32/40
+    "qwen3-vl:235b",         # 235B, tools+thinking+vision — native 0/40 (server blocked, confirmed F)
+    "gemma3:4b",             #  4B, vision only — NO tools, native 0/40
+    "gemma3:12b",            # 12B, vision only — NO tools, native 0/40
+    "gemma3:27b",            # 27B, vision only — NO tools, native 0/40
+]
+
+# Group D: Remaining — both layers have confirmed F
+GD_MODELS: list[str] = [
+    "qwen3-next:80b",        # 80B, tools+thinking — native 35/40, text 19/20
+    "rnj-1:8b",              #  8B, tools — native 36/40 (v_zero FFFF confirmed), text 16/20
+    "qwen3.5:397b",          # 397B, tools+thinking+vision — native 39/40, text 17/20 (worse on rerun)
+    "gpt-oss:20b",           # 20B, tools+thinking — native 29/40, text 15/20
+    "deepseek-v3.1:671b",    # 671B, tools+thinking — native 25/40 (think=true breaks), text 19/20
+    "deepseek-v3.2",         # 671B, tools+thinking — native 0/40, text 5/20
 ]
 
 # Models with thinking capability (for test_thinking_with_tools)
@@ -104,7 +108,7 @@ NO_TOOLS_MODELS: list[str] = [
     "gemma3:27b",
 ]
 
-ALL_MODELS: list[str] = P0_MODELS + P1_MODELS + P2_MODELS
+ALL_MODELS: list[str] = GA_MODELS + GB_MODELS + GC_MODELS + GD_MODELS
 
 
 # ─── Tool Definitions ──────────────────────────────────────────────

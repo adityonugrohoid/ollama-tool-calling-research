@@ -67,6 +67,9 @@ python fetch_model_library.py
 - `build_text_tool_system_prompt()` uses `$TOOL_DESCRIPTIONS` placeholder (not `str.format()`) to avoid JSON brace conflicts
 - `think=True` when flags.think is True, `think=None` otherwise (not False)
 
+### Analysis Scripts (scripts/)
+- `generate_subcheck_tables.py` — Parses sweep result files, generates expanded sub-check tables with P/F/T values (T=transient server error). Outputs per-flag-combo tables and cumulative comparison.
+
 ## Model Config
 - 32 models total from Ollama Cloud (29 with tools, 3 gemma3 without)
 - P0 (9 models, <30B): fast iteration
@@ -74,9 +77,27 @@ python fetch_model_library.py
 - P2 (17 models, 200B+): full coverage
 - Model names must match `model-library.json` exactly (fetched from `/api/tags`)
 
+## Sweep Results (all complete)
+- P0: 9 models, 252 runs — `observations/summaries/p0_v3_flagmatrix.md`
+- P1: 6 models, 168 runs — `observations/summaries/p1_v3_flagmatrix.md`
+- P2: 17 models, 476 runs — `observations/summaries/p2_v3_flagmatrix.md`
+- Sub-check tables: `observations/summaries/subcheck_tables.md`
+- Model groups: `observations/summaries/model_groups.md`
+- Historical: `p0_v1_8tests.md` (8-test baseline), `p0_v2_10tests.md` (10-test pre-restructure)
+
+## Model Groups (from 896 total runs)
+- **A: Perfect (60/60)** — 8 models: ministral-3 family (3b/8b/14b), devstral-2:123b, gemini-3-flash-preview, cogito-2.1:671b, kimi-k2.5, kimi-k2-thinking
+- **B: Transient-only (59/60)** — 2 models: minimax-m2, kimi-k2:1t (rerun to confirm)
+- **C: Near-perfect (54–58/60)** — 7 models: isolated sub-check weaknesses
+- **D: Infra-blocked (high T)** — 3 models: qwen3-vl:235b, qwen3-coder-next, qwen3-coder:480b (server rejects requests)
+- **E: Moderate (42–52/60)** — 8 models: native strong, text weak
+- **F: Text-only (20/60)** — 3 models: gemma3 family (no native support)
+- **G: Broken (5/60)** — 1 model: deepseek-v3.2
+
 ## Important Notes
 - This connects to Ollama Cloud API (not local). Requires `OLLAMA_API_KEY` in `.env`.
 - `observations/raw/` is gitignored — raw data is large and regenerable
 - `observations/summaries/` is tracked — these are the research deliverables
-- gemma3 models have NO native tool support but pass text-based fallback
-- gpt-oss:20b fails parallel calls (returns 1 instead of 2+) and text fallback
+- P/F/T scoring: P=pass, F=model failure, T=transient server error (500/503/-1)
+- Voxel tests have 5 sub-checks each: tool_selection, enum_adherence, integer_constraints, zero_param_tool, tool_discrimination
+- Total checks per model: 5 single tests + 5 voxel sub-checks + 5 voxel_text sub-checks = 15 per flag combo, 60 across all 4 combos
