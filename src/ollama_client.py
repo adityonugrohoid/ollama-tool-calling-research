@@ -2,21 +2,34 @@
 
 Handles both local and cloud connections via .env config.
 Every call logs the raw request and full raw response JSON to observations/raw/.
+Includes retry with exponential backoff for transient server errors (500/503/-1).
 """
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from ollama import Client
+from ollama import Client, ResponseError
 
 load_dotenv()
 
 RAW_DIR = Path(__file__).parent.parent / "observations" / "raw"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
+
+# Retry config for transient server errors
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2  # seconds: 2, 4, 8
+TRANSIENT_STATUS_CODES = {500, 503, -1}
+
+
+def console_print(msg: str) -> None:
+    """Print with rich markup (lazy import to avoid circular deps)."""
+    from rich.console import Console
+    Console().print(msg)
 
 
 def _build_client() -> Client:
@@ -73,6 +86,11 @@ def _save_raw(
     return filepath
 
 
+def _is_transient(e: ResponseError) -> bool:
+    """Check if a ResponseError is a transient server error worth retrying."""
+    return e.status_code in TRANSIENT_STATUS_CODES
+
+
 def chat(
     model: str,
     messages: list[dict[str, Any]],
@@ -83,6 +101,9 @@ def chat(
     think: bool | None = None,
 ) -> Any:
     """Send a chat request and log the raw request/response.
+
+    Retries up to MAX_RETRIES times on transient server errors (500/503/-1)
+    with exponential backoff. Non-transient errors are raised immediately.
 
     Returns the raw Ollama SDK response object.
     """
@@ -112,11 +133,31 @@ def chat(
         kwargs["think"] = think
         request_payload["think"] = think
 
-    response = client.chat(**kwargs)
+    last_error: ResponseError | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            response = client.chat(**kwargs)
+            if attempt > 0:
+                console_print(
+                    f"  [dim]Retry {attempt}/{MAX_RETRIES} succeeded for {model}[/dim]"
+                )
+            _save_raw(model, test_name, request_payload, response)
+            return response
+        except ResponseError as e:
+            last_error = e
+            if not _is_transient(e) or attempt == MAX_RETRIES:
+                # Non-transient or exhausted retries — save and raise
+                _save_raw(model, test_name, request_payload, {"error": str(e), "status_code": e.status_code})
+                raise
+            wait = RETRY_BACKOFF_BASE ** (attempt + 1)
+            console_print(
+                f"  [yellow]Transient error (status {e.status_code}), "
+                f"retry {attempt + 1}/{MAX_RETRIES} in {wait}s...[/yellow]"
+            )
+            time.sleep(wait)
 
-    _save_raw(model, test_name, request_payload, response)
-
-    return response
+    # Should not reach here, but just in case
+    raise last_error  # type: ignore[misc]
 
 
 def list_models() -> list[str]:
