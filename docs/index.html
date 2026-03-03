@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tool Calling Behavior Across Open-Source LLMs on Ollama Cloud</title>
+<meta name="description" content="Research portfolio: 32 models, 1,792 runs, 60 checks per model. Systematic evaluation of tool calling across open-source LLMs served through Ollama Cloud API.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 56px; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── CSS Variables ── */
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --green: #3fb950;
+  --red: #f85149;
+  --amber: #d29922;
+  --blue: #58a6ff;
+  --purple: #bc8cff;
+  --sky: #79c0ff;
+  --cyan: #56d4dd;
+  --orange: #f0883e;
+  --max-w: 1200px;
+}
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Sticky Nav ── */
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(13,17,23,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  height: 48px;
+  display: flex; align-items: center; justify-content: center;
+}
+.nav-inner {
+  max-width: var(--max-w); width: 100%; padding: 0 24px;
+  display: flex; align-items: center; gap: 4px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.nav-inner::-webkit-scrollbar { display: none; }
+.nav-link {
+  color: var(--muted); font-size: 13px; font-weight: 500;
+  padding: 6px 12px; border-radius: 6px;
+  white-space: nowrap; transition: all 0.2s;
+}
+.nav-link:hover { color: var(--text); text-decoration: none; background: rgba(255,255,255,0.05); }
+.nav-link.active { color: var(--text); background: rgba(255,255,255,0.08); }
+
+/* ── Layout ── */
+.container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+section { padding: 80px 0; }
+.section-title {
+  font-size: 28px; font-weight: 700; margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+.section-subtitle { color: var(--muted); font-size: 15px; margin-bottom: 40px; }
+
+/* ── Hero ── */
+.hero { padding: 100px 0 80px; text-align: center; }
+.hero h1 {
+  font-size: clamp(28px, 4vw, 44px); font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+.hero-date { color: var(--muted); font-size: 15px; margin-bottom: 40px; font-weight: 500; }
+.stat-cards {
+  display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px 28px; min-width: 140px; text-align: center;
+}
+.stat-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 36px; font-weight: 700; color: var(--green);
+  line-height: 1.1;
+}
+.stat-label { color: var(--muted); font-size: 13px; margin-top: 4px; font-weight: 500; }
+.hero-abstract {
+  color: var(--muted); font-size: 16px; max-width: 720px; margin: 0 auto;
+  line-height: 1.7;
+}
+
+/* ── Findings ── */
+.findings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.finding-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; position: relative;
+}
+.finding-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 600; color: var(--blue);
+  margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.finding-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.finding-body { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.mini-bar-wrap {
+  display: flex; gap: 12px; margin-top: 12px; align-items: center;
+}
+.mini-bar-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.mini-bar {
+  height: 8px; border-radius: 4px; display: inline-block;
+}
+.mini-bar-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+
+/* ── Leaderboard ── */
+.leaderboard-controls {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; align-items: center;
+}
+.provider-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+  padding: 4px 12px 4px 4px; cursor: pointer; transition: all 0.2s;
+  font-size: 13px; color: var(--muted);
+}
+.provider-chip:hover, .provider-chip.active { border-color: var(--blue); color: var(--text); }
+.provider-mono {
+  width: 24px; height: 24px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 700; color: #fff;
+}
+.table-wrap {
+  overflow-x: auto; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface);
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead th {
+  position: sticky; top: 0; background: #1c2128;
+  padding: 12px 14px; text-align: left; font-weight: 600; font-size: 13px;
+  color: var(--muted); border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+thead th .sort-arrow { margin-left: 4px; font-size: 11px; opacity: 0.5; }
+thead th.sorted .sort-arrow { opacity: 1; color: var(--blue); }
+tbody tr { border-bottom: 1px solid rgba(48,54,61,0.5); transition: opacity 0.2s; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+tbody tr.dimmed { opacity: 0.25; }
+td { padding: 10px 14px; vertical-align: middle; }
+td.rank-cell { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 13px; width: 40px; }
+td.model-name { font-family: 'JetBrains Mono', monospace; font-size: 13px; white-space: nowrap; }
+td.score-cell { width: 120px; }
+.score-bar-wrap {
+  position: relative; height: 28px; display: flex; align-items: center;
+}
+.score-bar-bg {
+  position: absolute; left: 0; top: 4px; height: 20px; border-radius: 4px; opacity: 0.15;
+}
+.score-bar-text {
+  position: relative; font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; font-weight: 600; z-index: 1; padding-left: 4px;
+}
+.score-transient { color: var(--amber); font-size: 11px; margin-left: 4px; }
+td.group-cell {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--muted);
+}
+.group-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle;
+}
+td.delta-cell { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+.delta-pos { color: var(--green); }
+.delta-neg { color: var(--red); }
+.delta-zero { color: var(--muted); }
+.badges-cell { display: flex; flex-wrap: wrap; gap: 4px; }
+.badge-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid transparent; transition: all 0.15s;
+  white-space: nowrap;
+}
+.badge-pill:hover { filter: brightness(1.2); }
+/* Badge colors */
+.badge-PERFECT { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge-NEAR-PERFECT { background: rgba(88,166,255,0.15); color: var(--blue); }
+.badge-FUNCTIONAL { background: rgba(210,153,34,0.15); color: var(--amber); }
+.badge-MINIMAL { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge-DUAL-LAYER, .badge-NATIVE-ONLY, .badge-TEXT-ONLY, .badge-MIXED-LAYER {
+  background: rgba(188,140,255,0.15); color: var(--purple);
+}
+.badge-ROCK-STABLE, .badge-IMPROVED, .badge-MAJOR-UPGRADE {
+  background: rgba(121,192,255,0.15); color: var(--sky);
+}
+.badge-SLIGHT-REGRESSION, .badge-MAJOR-REGRESSION {
+  background: rgba(121,192,255,0.15); color: var(--sky);
+}
+.badge-DETERMINISTIC, .badge-NONDETERMINISTIC, .badge-SERVER-UNSTABLE {
+  background: rgba(86,212,221,0.15); color: var(--cyan);
+}
+.badge-FLAG-AGNOSTIC, .badge-STREAM-SENSITIVE, .badge-THINK-SENSITIVE, .badge-THINK-ALTERNATING {
+  background: rgba(240,136,62,0.15); color: var(--orange);
+}
+.badge-ENUM-HALLUCINATOR, .badge-BOUNDARY-CONFUSED, .badge-PARALLEL-INCAPABLE,
+.badge-FORMAT-SWITCHER, .badge-SERVER-BLOCKED, .badge-ZERO-PARAM-FAIL {
+  background: rgba(248,81,73,0.15); color: var(--red);
+}
+.badge-pill.active-filter { border-color: currentColor; box-shadow: 0 0 6px currentColor; }
+
+/* ── Score Distribution ── */
+.tier-bar-wrap {
+  display: flex; height: 40px; border-radius: 8px; overflow: hidden;
+  margin-bottom: 32px; border: 1px solid var(--border);
+}
+.tier-bar-seg {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: #000;
+  transition: flex 0.3s;
+}
+.tier-bar-seg span { font-family: 'JetBrains Mono', monospace; }
+.dist-chart { display: flex; flex-direction: column; gap: 4px; }
+.dist-row {
+  display: flex; align-items: center; gap: 8px; height: 26px;
+}
+.dist-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  color: var(--muted); width: 200px; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dist-bar-wrap { flex: 1; height: 18px; position: relative; }
+.dist-bar {
+  height: 100%; border-radius: 3px; transition: width 0.5s ease;
+  position: absolute; left: 0; top: 0;
+}
+.dist-score {
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--muted); width: 36px;
+}
+
+/* ── Families ── */
+.families-grid { display: flex; flex-direction: column; gap: 16px; }
+.family-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; display: flex; gap: 20px; align-items: flex-start;
+}
+.family-rank {
+  font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 800;
+  color: var(--muted); min-width: 48px; text-align: center; line-height: 1;
+}
+.family-rank.gold { color: var(--amber); }
+.family-rank.silver { color: #adbac7; }
+.family-rank.bronze { color: #da7b3a; }
+.family-info { flex: 1; }
+.family-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.family-members {
+  font-size: 13px; color: var(--muted); margin-bottom: 8px; line-height: 1.6;
+}
+.family-members .mono { color: var(--text); }
+.family-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* ── Flag Matrix ── */
+.flag-matrix-wrap {
+  display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start;
+}
+.flag-grid {
+  display: grid; grid-template-columns: auto 1fr 1fr; gap: 0;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  min-width: 320px;
+}
+.flag-cell {
+  padding: 16px 24px; border: 1px solid var(--border);
+  text-align: center; font-size: 14px;
+}
+.flag-header {
+  background: #1c2128; font-weight: 600; color: var(--muted); font-size: 13px;
+}
+.flag-label {
+  background: #1c2128; font-weight: 600; color: var(--muted); font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.flag-combo-name {
+  font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  font-size: 15px; margin-bottom: 4px;
+}
+.flag-combo-desc { font-size: 12px; color: var(--muted); }
+.flag-explainer { flex: 1; min-width: 280px; }
+.flag-explainer h3 { font-size: 16px; margin-bottom: 12px; }
+.flag-explainer p { color: var(--muted); font-size: 14px; line-height: 1.7; margin-bottom: 12px; }
+.legend-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+.legend-item {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+}
+.legend-dot {
+  width: 12px; height: 12px; border-radius: 3px;
+}
+
+/* ── Test Suite ── */
+.tests-list { display: flex; flex-direction: column; gap: 12px; }
+details.test-detail {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden;
+}
+details.test-detail summary {
+  padding: 16px 20px; cursor: pointer; font-weight: 600; font-size: 15px;
+  list-style: none; display: flex; align-items: center; gap: 12px;
+}
+details.test-detail summary::-webkit-details-marker { display: none; }
+details.test-detail summary::before {
+  content: ''; width: 0; height: 0;
+  border-left: 6px solid var(--muted); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+  transition: transform 0.2s;
+}
+details.test-detail[open] summary::before { transform: rotate(90deg); }
+.test-tier-label {
+  font-size: 11px; font-family: 'JetBrains Mono', monospace;
+  padding: 2px 8px; border-radius: 8px; font-weight: 600;
+}
+.tier-core { background: rgba(63,185,80,0.15); color: var(--green); }
+.tier-stress { background: rgba(210,153,34,0.15); color: var(--amber); }
+.tier-schema { background: rgba(188,140,255,0.15); color: var(--purple); }
+.test-content { padding: 0 20px 20px; }
+.test-content p { color: var(--muted); font-size: 14px; margin-bottom: 8px; line-height: 1.6; }
+.test-content .mono { color: var(--text); font-size: 13px; }
+.subchecks-table {
+  width: 100%; border-collapse: collapse; margin-top: 12px;
+  font-size: 13px;
+}
+.subchecks-table th, .subchecks-table td {
+  padding: 8px 12px; text-align: left; border: 1px solid var(--border);
+}
+.subchecks-table th { background: #1c2128; color: var(--muted); font-size: 12px; }
+.subchecks-table td { color: var(--text); }
+.subchecks-table td:first-child { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+/* ── Badge Reference ── */
+.badge-ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.badge-ref-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px;
+}
+.badge-ref-title {
+  font-size: 14px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; margin-bottom: 12px;
+}
+.badge-ref-item {
+  display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px;
+  font-size: 13px;
+}
+.badge-ref-item .badge-pill { flex-shrink: 0; }
+.badge-ref-criteria { color: var(--muted); line-height: 1.4; padding-top: 2px; }
+
+/* ── Footer ── */
+.footer {
+  border-top: 1px solid var(--border); padding: 40px 0;
+  text-align: center; color: var(--muted); font-size: 14px;
+}
+.footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 12px; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .container { padding: 0 16px; }
+  section { padding: 48px 0; }
+  .hero { padding: 60px 0 48px; }
+  .stat-cards { gap: 8px; }
+  .stat-card { padding: 14px 18px; min-width: 110px; }
+  .stat-num { font-size: 28px; }
+  .findings-grid { grid-template-columns: 1fr; }
+  .family-card { flex-direction: column; }
+  .flag-matrix-wrap { flex-direction: column; }
+  .badge-ref-grid { grid-template-columns: 1fr; }
+  .dist-label { width: 120px; font-size: 10px; }
+  .leaderboard-controls { gap: 4px; }
+  .provider-chip { font-size: 12px; padding: 3px 8px 3px 3px; }
+  .badges-cell { max-width: 200px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#hero" class="nav-link" data-section="hero">Home</a>
+    <a href="#findings" class="nav-link" data-section="findings">Findings</a>
+    <a href="#leaderboard" class="nav-link" data-section="leaderboard">Leaderboard</a>
+    <a href="#distribution" class="nav-link" data-section="distribution">Distribution</a>
+    <a href="#families" class="nav-link" data-section="families">Families</a>
+    <a href="#flagmatrix" class="nav-link" data-section="flagmatrix">Flag Matrix</a>
+    <a href="#testsuite" class="nav-link" data-section="testsuite">Test Suite</a>
+    <a href="#badges" class="nav-link" data-section="badges">Badges</a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section id="hero" class="hero">
+  <div class="container">
+    <h1>Tool Calling Behavior Across<br>Open-Source LLMs on Ollama Cloud</h1>
+    <div class="hero-date">March 2026</div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-num">32</div><div class="stat-label">Models</div></div>
+      <div class="stat-card"><div class="stat-num">1,792</div><div class="stat-label">Runs</div></div>
+      <div class="stat-card"><div class="stat-num">60</div><div class="stat-label">Checks / Model</div></div>
+      <div class="stat-card"><div class="stat-num">11</div><div class="stat-label">Providers</div></div>
+    </div>
+    <p class="hero-abstract">
+      Systematic evaluation of native and text-based tool calling across 32 open-source LLMs from 11 providers,
+      tested under 4 flag combinations (stream &times; think) with 7 tests covering core plumbing, behavioral stress,
+      and schema complexity.
+    </p>
+  </div>
+</section>
+
+<!-- ── Key Findings ── -->
+<section id="findings">
+  <div class="container">
+    <h2 class="section-title">Key Findings</h2>
+    <p class="section-subtitle">9 findings from 1,792 test runs across 32 models</p>
+    <div class="findings-grid">
+      <div class="finding-card">
+        <div class="finding-num">Finding #1</div>
+        <div class="finding-title">No size-quality correlation</div>
+        <div class="finding-body">
+          ministral-3:3b (3B params) scores 60/60. deepseek-v3.2 (671B params) scores 16/60. Model size is not a predictor of tool calling capability.
+        </div>
+        <div class="mini-bar-wrap">
+          <div class="mini-bar-item">
+            <span class="mini-bar-label">3B</span>
+            <span class="mini-bar" style="width:100px;background:var(--green)"></span>
+            <span class="mini-bar-label">60</span>
+          </div>
+          <div class="mini-bar-item">
+            <span class="mini-bar-label">671B</span>
+            <span class="mini-bar" style="width:27px;background:var(--red)"></span>
+            <span class="mini-bar-label">16</span>
+          </div>
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #2</div>
+        <div class="finding-title">Layer independence</div>
+        <div class="finding-body">
+          Native and text-based tool calling are orthogonal capabilities. Group GB (8 models) proves native competence does not imply text competence. Group GC (8 models) proves the reverse.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #3</div>
+        <div class="finding-title">Flag agnosticism equals reliability</div>
+        <div class="finding-body">
+          All 10 perfect models are completely flag-agnostic &mdash; identical behavior regardless of streaming or thinking settings. This is the strongest signal of production readiness.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #4</div>
+        <div class="finding-title">Streaming degrades, never improves</div>
+        <div class="finding-body">
+          Across 32 models and 1,792 runs, <code>stream=true</code> never rescued a failing test. It occasionally degraded passing tests and significantly amplified transient server errors.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #5</div>
+        <div class="finding-title">Thinking is a wild card</div>
+        <div class="finding-body">
+          <code>think=true</code> can help or hurt specific tests on the same model. deepseek-v3.1's FPFP/PFPF alternation: thinking fixes single-tool but breaks multi-step consistency.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #6</div>
+        <div class="finding-title">Server stability is a measurement variable</div>
+        <div class="finding-body">
+          Three models changed by &gt;5 points between sweeps due to server behavior, not model behavior: cogito (&minus;40T), qwen3-vl:235b (+40T&rarr;P), minimax-m2 (&minus;7T).
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #7</div>
+        <div class="finding-title">Family consistency</div>
+        <div class="finding-body">
+          Models in the same family share failure patterns: GLM text fallback broken; GPT-OSS parallel FFFF + enum hallucination; Gemma3 zero native, perfect text; Mistral boundary confusion at x=15,y=15,z=15.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #8</div>
+        <div class="finding-title">Voxel tests are the real discriminator</div>
+        <div class="finding-body">
+          25/32 models pass single/multi/parallel on baseline, but only 10/32 pass all voxel sub-checks. Schema complexity reveals capability differences invisible to simpler tests.
+        </div>
+      </div>
+      <div class="finding-card">
+        <div class="finding-num">Finding #9</div>
+        <div class="finding-title">Measurement reproducibility is high</div>
+        <div class="finding-body">
+          14/32 models are fully deterministic across independent sweeps. Consistent failure signatures (parallel FFFF, v_int FFFF, GLM text FFFF) reproduce identically.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Leaderboard ── -->
+<section id="leaderboard">
+  <div class="container">
+    <h2 class="section-title">Model Leaderboard</h2>
+    <p class="section-subtitle">All 32 models ranked by v4 score. Click column headers to sort, badges to filter.</p>
+    <div class="leaderboard-controls" id="providerFilters"></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sorted" data-col="rank">#<span class="sort-arrow">&#9650;</span></th>
+            <th data-col="provider">Provider<span class="sort-arrow"></span></th>
+            <th data-col="model">Model<span class="sort-arrow"></span></th>
+            <th data-col="score">Score<span class="sort-arrow"></span></th>
+            <th data-col="group">Group<span class="sort-arrow"></span></th>
+            <th data-col="v3">v3<span class="sort-arrow"></span></th>
+            <th data-col="delta">Delta<span class="sort-arrow"></span></th>
+            <th>Badges</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Score Distribution ── -->
+<section id="distribution">
+  <div class="container">
+    <h2 class="section-title">Score Distribution</h2>
+    <p class="section-subtitle">32 models across 4 performance tiers</p>
+    <div class="tier-bar-wrap">
+      <div class="tier-bar-seg" style="flex:31;background:var(--green)"><span>PERFECT 31%</span></div>
+      <div class="tier-bar-seg" style="flex:19;background:var(--blue)"><span>NEAR-PERFECT 19%</span></div>
+      <div class="tier-bar-seg" style="flex:34;background:var(--amber)"><span>FUNCTIONAL 34%</span></div>
+      <div class="tier-bar-seg" style="flex:16;background:var(--red)"><span>MINIMAL 16%</span></div>
+    </div>
+    <div class="dist-chart" id="distChart"></div>
+  </div>
+</section>
+
+<!-- ── Top 5 Families ── -->
+<section id="families">
+  <div class="container">
+    <h2 class="section-title">Top 5 Model Families</h2>
+    <p class="section-subtitle">Ranked by highest member score and family consistency</p>
+    <div class="families-grid" id="familiesGrid"></div>
+  </div>
+</section>
+
+<!-- ── Flag Matrix ── -->
+<section id="flagmatrix">
+  <div class="container">
+    <h2 class="section-title">Flag Matrix</h2>
+    <p class="section-subtitle">Each model tested under 4 combinations of stream and think flags</p>
+    <div class="flag-matrix-wrap">
+      <div class="flag-grid">
+        <div class="flag-cell flag-header"></div>
+        <div class="flag-cell flag-header">think=false</div>
+        <div class="flag-cell flag-header">think=true</div>
+        <div class="flag-cell flag-label">stream=false</div>
+        <div class="flag-cell">
+          <div class="flag-combo-name">S0T0</div>
+          <div class="flag-combo-desc">Baseline</div>
+        </div>
+        <div class="flag-cell">
+          <div class="flag-combo-name">S0T1</div>
+          <div class="flag-combo-desc">Thinking interference</div>
+        </div>
+        <div class="flag-cell flag-label">stream=true</div>
+        <div class="flag-cell">
+          <div class="flag-combo-name">S1T0</div>
+          <div class="flag-combo-desc">Stream integrity</div>
+        </div>
+        <div class="flag-cell">
+          <div class="flag-combo-name">S1T1</div>
+          <div class="flag-combo-desc">Combined stress</div>
+        </div>
+      </div>
+      <div class="flag-explainer">
+        <h3>Scoring Breakdown</h3>
+        <p>
+          7 tests per flag combo. Voxel tests expand to 5 sub-checks each (native + text), yielding
+          <strong>15 checks per flag combo</strong> and <strong>60 checks per model</strong> across all 4 combos.
+        </p>
+        <p>
+          <code>temperature=0</code>, <code>seed=42</code> for reproducibility.
+          Each test uses the model's default <code>num_ctx</code>.
+        </p>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> P &mdash; Pass</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> F &mdash; Fail (model)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> T &mdash; Transient (server)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Test Suite ── -->
+<section id="testsuite">
+  <div class="container">
+    <h2 class="section-title">Test Suite</h2>
+    <p class="section-subtitle">7 tests across 3 tiers of complexity</p>
+    <div class="tests-list">
+      <details class="test-detail">
+        <summary><span class="test-tier-label tier-core">CORE</span> Core Plumbing (3 tests)</summary>
+        <div class="test-content">
+          <p><strong class="mono">single_tool</strong> &mdash; 1 tool (get_weather). &ldquo;What is the current weather in Tokyo?&rdquo; Validates basic tool invocation.</p>
+          <p><strong class="mono">multi_tool</strong> &mdash; 3 tools. &ldquo;What's the weather like in Paris?&rdquo; Validates correct selection from a set.</p>
+          <p><strong class="mono">parallel_calls</strong> &mdash; 3 tools. &ldquo;Weather in London and population of London?&rdquo; Validates multiple tool calls in a single response.</p>
+        </div>
+      </details>
+      <details class="test-detail">
+        <summary><span class="test-tier-label tier-stress">STRESS</span> Behavioral Stress (2 tests)</summary>
+        <div class="test-content">
+          <p><strong class="mono">multi_step</strong> &mdash; 1 tool, 5 turns. Sequential weather prompts for Tokyo, Paris, New York, London, Sydney. Validates format consistency across conversation turns.</p>
+          <p><strong class="mono">tool_count_scaling</strong> &mdash; 1&rarr;15 tools. &ldquo;Current weather in Tokyo?&rdquo; at scale 1, 3, 5, 8, 10, 15. Validates selection under proliferation.</p>
+        </div>
+      </details>
+      <details class="test-detail">
+        <summary><span class="test-tier-label tier-schema">SCHEMA</span> Schema Complexity (2 tests &times; 5 sub-checks)</summary>
+        <div class="test-content">
+          <p><strong class="mono">voxel_tools</strong> (native) and <strong class="mono">voxel_tools_text</strong> (text fallback) &mdash; 4 tools (placeBlock, removeBlock, getWorldState, done) with complex parameter constraints.</p>
+          <table class="subchecks-table">
+            <thead><tr><th>Sub-check</th><th>Prompt</th><th>Validates</th></tr></thead>
+            <tbody>
+              <tr><td>v_sel</td><td>&ldquo;Place a stone block at x=3, y=0, z=5.&rdquo;</td><td>Correct tool + all args</td></tr>
+              <tr><td>v_enum</td><td>&ldquo;Place a gold block at x=7, y=1, z=7.&rdquo;</td><td>Enum value exactly &ldquo;gold&rdquo;</td></tr>
+              <tr><td>v_int</td><td>&ldquo;Place stone at x=15, y=15, z=15.&rdquo;</td><td>Boundary integers (max=15)</td></tr>
+              <tr><td>v_zero</td><td>&ldquo;Check current world state.&rdquo;</td><td>Zero-param tool handling</td></tr>
+              <tr><td>v_disc</td><td>&ldquo;Remove block at x=3, y=0, z=5.&rdquo;</td><td>Tool discrimination</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ── Badge System ── -->
+<section id="badges">
+  <div class="container">
+    <h2 class="section-title">Badge System</h2>
+    <p class="section-subtitle">6 categories describing model behavior across multiple dimensions</p>
+    <div class="badge-ref-grid">
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--green)">Performance Tier</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-PERFECT">PERFECT</span><span class="badge-ref-criteria">60/60 &mdash; 10 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-NEAR-PERFECT">NEAR-PERFECT</span><span class="badge-ref-criteria">55&ndash;59/60 &mdash; 6 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-FUNCTIONAL">FUNCTIONAL</span><span class="badge-ref-criteria">40&ndash;54/60 &mdash; 11 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-MINIMAL">MINIMAL</span><span class="badge-ref-criteria">15&ndash;39/60 &mdash; 5 models</span></div>
+      </div>
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--purple)">Layer Capability</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-DUAL-LAYER">DUAL-LAYER</span><span class="badge-ref-criteria">Native 40/40 P and text 20/20 P</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-NATIVE-ONLY">NATIVE-ONLY</span><span class="badge-ref-criteria">Native 40/40 P, text has failures</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-TEXT-ONLY">TEXT-ONLY</span><span class="badge-ref-criteria">Text 20/20 P, native has failures</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-MIXED-LAYER">MIXED-LAYER</span><span class="badge-ref-criteria">Both layers have failures</span></div>
+      </div>
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--sky)">Temporal Stability</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-ROCK-STABLE">ROCK-STABLE</span><span class="badge-ref-criteria">v3&rarr;v4 delta = 0 &mdash; 19 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-IMPROVED">IMPROVED</span><span class="badge-ref-criteria">Delta +1 to +3 &mdash; 4 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-MAJOR-UPGRADE">MAJOR-UPGRADE</span><span class="badge-ref-criteria">Delta &gt; +3 &mdash; 2 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-SLIGHT-REGRESSION">SLIGHT-REGRESSION</span><span class="badge-ref-criteria">Delta &minus;1 to &minus;3 &mdash; 5 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-MAJOR-REGRESSION">MAJOR-REGRESSION</span><span class="badge-ref-criteria">Delta &lt; &minus;3 &mdash; 2 models</span></div>
+      </div>
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--cyan)">Reproducibility</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-DETERMINISTIC">DETERMINISTIC</span><span class="badge-ref-criteria">Identical sub-check pattern across sweeps &mdash; 14 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-NONDETERMINISTIC">NONDETERMINISTIC</span><span class="badge-ref-criteria">Same total, sub-checks shuffle &mdash; 5 models</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-SERVER-UNSTABLE">SERVER-UNSTABLE</span><span class="badge-ref-criteria">Score change driven by infrastructure &mdash; 3 models</span></div>
+      </div>
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--orange)">Flag Sensitivity</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-FLAG-AGNOSTIC">FLAG-AGNOSTIC</span><span class="badge-ref-criteria">Uniform P/F/T across all 4 combos</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-STREAM-SENSITIVE">STREAM-SENSITIVE</span><span class="badge-ref-criteria">stream=true changes outcomes</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-THINK-SENSITIVE">THINK-SENSITIVE</span><span class="badge-ref-criteria">think=true changes outcomes</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-THINK-ALTERNATING">THINK-ALTERNATING</span><span class="badge-ref-criteria">Systematic PFPF/FPFP pattern</span></div>
+      </div>
+      <div class="badge-ref-card">
+        <div class="badge-ref-title" style="color:var(--red)">Failure Signature</div>
+        <div class="badge-ref-item"><span class="badge-pill badge-ENUM-HALLUCINATOR">ENUM-HALLUCINATOR</span><span class="badge-ref-criteria">Fabricates enum values not in schema</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-BOUNDARY-CONFUSED">BOUNDARY-CONFUSED</span><span class="badge-ref-criteria">Fails at integer min/max boundaries</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-PARALLEL-INCAPABLE">PARALLEL-INCAPABLE</span><span class="badge-ref-criteria">Returns 1 call instead of 2+</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-SERVER-BLOCKED">SERVER-BLOCKED</span><span class="badge-ref-criteria">Server rejects the request</span></div>
+        <div class="badge-ref-item"><span class="badge-pill badge-ZERO-PARAM-FAIL">ZERO-PARAM-FAIL</span><span class="badge-ref-criteria">Cannot handle zero-parameter tools</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/adityonugrohoid/ollama-tool-calling-research" target="_blank" rel="noopener">GitHub Repository</a>
+      <a href="https://github.com/adityonugrohoid/ollama-tool-calling-research/blob/main/observations/summaries/research_report.md" target="_blank" rel="noopener">Full Research Report</a>
+    </div>
+    <p>March 2026 &middot; Adityo Nugroho</p>
+  </div>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Model Data ──
+  var PROVIDERS = {
+    'Mistral AI': { mono: 'MI', color: '#ff7000' },
+    'Google':     { mono: 'Go', color: '#4285f4' },
+    'Moonshot AI':{ mono: 'Ki', color: '#6e40c9' },
+    'MiniMax':    { mono: 'Mx', color: '#238636' },
+    'Zhipu AI':   { mono: 'Zh', color: '#1f6feb' },
+    'Alibaba':    { mono: 'Qw', color: '#ff6a00' },
+    'NVIDIA':     { mono: 'NV', color: '#76b900' },
+    'DeepSeek':   { mono: 'DS', color: '#58a6ff' },
+    'Deep Cogito':{ mono: 'Co', color: '#bc8cff' },
+    'GPT-OSS':    { mono: 'OS', color: '#8b949e' },
+    'RNJ':        { mono: 'RN', color: '#8b949e' }
+  };
+
+  var MODELS = [
+    { rank:1,  model:'ministral-3:3b',          provider:'Mistral AI',  score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:2,  model:'ministral-3:8b',          provider:'Mistral AI',  score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:3,  model:'ministral-3:14b',         provider:'Mistral AI',  score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:4,  model:'devstral-2:123b',         provider:'Mistral AI',  score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:5,  model:'gemini-3-flash-preview',  provider:'Google',      score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:6,  model:'kimi-k2.5',               provider:'Moonshot AI', score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:7,  model:'kimi-k2-thinking',        provider:'Moonshot AI', score:60, v3:60, delta:0,   group:'GA', badges:['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:8,  model:'kimi-k2:1t',              provider:'Moonshot AI', score:60, v3:59, delta:1,   group:'GA', badges:['PERFECT','DUAL-LAYER','IMPROVED','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:9,  model:'minimax-m2.1',            provider:'MiniMax',     score:60, v3:57, delta:3,   group:'GB', badges:['PERFECT','DUAL-LAYER','IMPROVED','FLAG-AGNOSTIC'] },
+    { rank:10, model:'qwen3-vl:235b',           provider:'Alibaba',     score:60, v3:20, delta:40,  group:'GC', badges:['PERFECT','DUAL-LAYER','MAJOR-UPGRADE','FLAG-AGNOSTIC','SERVER-UNSTABLE'], transient:'40T' },
+    { rank:11, model:'qwen3.5:397b',            provider:'Alibaba',     score:58, v3:58, delta:0,   group:'GD', badges:['NEAR-PERFECT','MIXED-LAYER','ROCK-STABLE','NONDETERMINISTIC'] },
+    { rank:12, model:'qwen3-vl:235b-instruct',  provider:'Alibaba',     score:57, v3:57, delta:0,   group:'GC', badges:['NEAR-PERFECT','TEXT-ONLY','ROCK-STABLE','NONDETERMINISTIC','THINK-SENSITIVE'] },
+    { rank:13, model:'minimax-m2.5',            provider:'MiniMax',     score:57, v3:57, delta:0,   group:'GB', badges:['NEAR-PERFECT','NATIVE-ONLY','ROCK-STABLE','NONDETERMINISTIC'] },
+    { rank:14, model:'devstral-small-2:24b',    provider:'Mistral AI',  score:56, v3:56, delta:0,   group:'GC', badges:['NEAR-PERFECT','TEXT-ONLY','ROCK-STABLE','DETERMINISTIC','BOUNDARY-CONFUSED'] },
+    { rank:15, model:'qwen3-next:80b',          provider:'Alibaba',     score:55, v3:54, delta:1,   group:'GD', badges:['NEAR-PERFECT','MIXED-LAYER','IMPROVED'] },
+    { rank:16, model:'mistral-large-3:675b',    provider:'Mistral AI',  score:55, v3:56, delta:-1,  group:'GC', badges:['NEAR-PERFECT','TEXT-ONLY','SLIGHT-REGRESSION','BOUNDARY-CONFUSED'] },
+    { rank:17, model:'minimax-m2',              provider:'MiniMax',     score:52, v3:59, delta:-7,  group:'GA', badges:['FUNCTIONAL','DUAL-LAYER','MAJOR-REGRESSION','SERVER-UNSTABLE'], transient:'7T' },
+    { rank:18, model:'rnj-1:8b',               provider:'RNJ',         score:52, v3:52, delta:0,   group:'GD', badges:['FUNCTIONAL','MIXED-LAYER','ROCK-STABLE','DETERMINISTIC','ZERO-PARAM-FAIL'] },
+    { rank:19, model:'gpt-oss:120b',           provider:'GPT-OSS',     score:51, v3:52, delta:-1,  group:'GC', badges:['FUNCTIONAL','TEXT-ONLY','SLIGHT-REGRESSION','PARALLEL-INCAPABLE','ENUM-HALLUCINATOR'] },
+    { rank:20, model:'glm-4.6',                provider:'Zhipu AI',    score:48, v3:49, delta:-1,  group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','SLIGHT-REGRESSION','FLAG-AGNOSTIC'] },
+    { rank:21, model:'deepseek-v3.1:671b',     provider:'DeepSeek',    score:46, v3:44, delta:2,   group:'GD', badges:['FUNCTIONAL','MIXED-LAYER','IMPROVED','THINK-ALTERNATING'] },
+    { rank:22, model:'gpt-oss:20b',            provider:'GPT-OSS',     score:44, v3:44, delta:0,   group:'GD', badges:['FUNCTIONAL','MIXED-LAYER','ROCK-STABLE','NONDETERMINISTIC','PARALLEL-INCAPABLE','ENUM-HALLUCINATOR'] },
+    { rank:23, model:'nemotron-3-nano:30b',    provider:'NVIDIA',      score:44, v3:47, delta:-3,  group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','SLIGHT-REGRESSION','STREAM-SENSITIVE'] },
+    { rank:24, model:'glm-4.7',                provider:'Zhipu AI',    score:42, v3:42, delta:0,   group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','ROCK-STABLE','NONDETERMINISTIC'] },
+    { rank:25, model:'glm-5',                  provider:'Zhipu AI',    score:41, v3:43, delta:-2,  group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','SLIGHT-REGRESSION'] },
+    { rank:26, model:'qwen3-coder-next',       provider:'Alibaba',     score:40, v3:40, delta:0,   group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','ROCK-STABLE','DETERMINISTIC','SERVER-BLOCKED'] },
+    { rank:27, model:'qwen3-coder:480b',       provider:'Alibaba',     score:40, v3:40, delta:0,   group:'GB', badges:['FUNCTIONAL','NATIVE-ONLY','ROCK-STABLE','DETERMINISTIC','SERVER-BLOCKED'] },
+    { rank:28, model:'gemma3:4b',              provider:'Google',      score:20, v3:20, delta:0,   group:'GC', badges:['MINIMAL','TEXT-ONLY','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:29, model:'gemma3:12b',             provider:'Google',      score:20, v3:20, delta:0,   group:'GC', badges:['MINIMAL','TEXT-ONLY','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:30, model:'gemma3:27b',             provider:'Google',      score:20, v3:20, delta:0,   group:'GC', badges:['MINIMAL','TEXT-ONLY','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'] },
+    { rank:31, model:'cogito-2.1:671b',        provider:'Deep Cogito', score:20, v3:60, delta:-40, group:'GA', badges:['MINIMAL','DUAL-LAYER','MAJOR-REGRESSION','STREAM-SENSITIVE','SERVER-UNSTABLE'], transient:'40T' },
+    { rank:32, model:'deepseek-v3.2',          provider:'DeepSeek',    score:16, v3:5,  delta:11,  group:'GD', badges:['MINIMAL','MIXED-LAYER','MAJOR-UPGRADE'] }
+  ];
+
+  var TIER_COLORS = { PERFECT: '#3fb950', 'NEAR-PERFECT': '#58a6ff', FUNCTIONAL: '#d29922', MINIMAL: '#f85149' };
+  var GROUP_COLORS = { GA: '#3fb950', GB: '#58a6ff', GC: '#d29922', GD: '#f85149' };
+
+  function getTier(score) {
+    if (score >= 60) return 'PERFECT';
+    if (score >= 55) return 'NEAR-PERFECT';
+    if (score >= 40) return 'FUNCTIONAL';
+    return 'MINIMAL';
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── State ──
+  var sortColumn = 'rank';
+  var sortDir = 'asc';
+  var activeBadgeFilter = null;
+  var activeProviderFilter = null;
+
+  // ── Provider Monogram Element ──
+  function createProviderMono(providerName) {
+    var p = PROVIDERS[providerName];
+    if (!p) return document.createTextNode('');
+    var span = document.createElement('span');
+    span.className = 'provider-mono';
+    span.style.background = p.color;
+    span.textContent = p.mono;
+    return span;
+  }
+
+  // ── Badge Pill Element ──
+  function createBadgePill(badge) {
+    var span = document.createElement('span');
+    span.className = 'badge-pill badge-' + badge + (activeBadgeFilter === badge ? ' active-filter' : '');
+    span.textContent = badge;
+    span.addEventListener('click', function() { filterByBadge(badge); });
+    return span;
+  }
+
+  // ── Render Leaderboard ──
+  function renderTable() {
+    var sorted = MODELS.slice().sort(function(a, b) {
+      var va = a[sortColumn], vb = b[sortColumn];
+      if (sortColumn === 'model' || sortColumn === 'provider' || sortColumn === 'group') {
+        va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+        return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+
+    var tbody = document.getElementById('leaderboardBody');
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    sorted.forEach(function(m) {
+      var tier = getTier(m.score);
+      var tierColor = TIER_COLORS[tier];
+      var barWidth = Math.round((m.score / 60) * 100);
+      var dimmed = (activeBadgeFilter && m.badges.indexOf(activeBadgeFilter) === -1) ||
+                   (activeProviderFilter && m.provider !== activeProviderFilter);
+
+      var tr = document.createElement('tr');
+      if (dimmed) tr.className = 'dimmed';
+
+      // Rank
+      var tdRank = document.createElement('td');
+      tdRank.className = 'rank-cell';
+      tdRank.textContent = m.rank;
+      tr.appendChild(tdRank);
+
+      // Provider
+      var tdProvider = document.createElement('td');
+      tdProvider.appendChild(createProviderMono(m.provider));
+      var provLabel = document.createElement('span');
+      provLabel.style.cssText = 'color:var(--muted);font-size:12px;margin-left:4px';
+      provLabel.textContent = m.provider;
+      tdProvider.appendChild(provLabel);
+      tr.appendChild(tdProvider);
+
+      // Model name
+      var tdModel = document.createElement('td');
+      tdModel.className = 'model-name';
+      tdModel.textContent = m.model;
+      tr.appendChild(tdModel);
+
+      // Score
+      var tdScore = document.createElement('td');
+      tdScore.className = 'score-cell';
+      var scoreWrap = document.createElement('div');
+      scoreWrap.className = 'score-bar-wrap';
+      var scoreBg = document.createElement('div');
+      scoreBg.className = 'score-bar-bg';
+      scoreBg.style.cssText = 'width:' + barWidth + '%;background:' + tierColor;
+      scoreWrap.appendChild(scoreBg);
+      var scoreText = document.createElement('span');
+      scoreText.className = 'score-bar-text';
+      scoreText.style.color = tierColor;
+      scoreText.textContent = m.score + '/60';
+      scoreWrap.appendChild(scoreText);
+      if (m.transient) {
+        var transSpan = document.createElement('span');
+        transSpan.className = 'score-transient';
+        transSpan.textContent = '(' + m.transient + ')';
+        scoreWrap.appendChild(transSpan);
+      }
+      tdScore.appendChild(scoreWrap);
+      tr.appendChild(tdScore);
+
+      // Group
+      var tdGroup = document.createElement('td');
+      tdGroup.className = 'group-cell';
+      var groupDot = document.createElement('span');
+      groupDot.className = 'group-dot';
+      groupDot.style.background = GROUP_COLORS[m.group];
+      tdGroup.appendChild(groupDot);
+      tdGroup.appendChild(document.createTextNode(m.group));
+      tr.appendChild(tdGroup);
+
+      // v3
+      var tdV3 = document.createElement('td');
+      tdV3.className = 'rank-cell';
+      tdV3.textContent = m.v3;
+      tr.appendChild(tdV3);
+
+      // Delta
+      var tdDelta = document.createElement('td');
+      tdDelta.className = 'delta-cell';
+      var deltaSpan = document.createElement('span');
+      deltaSpan.className = m.delta > 0 ? 'delta-pos' : m.delta < 0 ? 'delta-neg' : 'delta-zero';
+      deltaSpan.textContent = m.delta > 0 ? '+' + m.delta : m.delta === 0 ? '0' : String(m.delta);
+      tdDelta.appendChild(deltaSpan);
+      tr.appendChild(tdDelta);
+
+      // Badges
+      var tdBadges = document.createElement('td');
+      var badgesDiv = document.createElement('div');
+      badgesDiv.className = 'badges-cell';
+      m.badges.forEach(function(b) { badgesDiv.appendChild(createBadgePill(b)); });
+      tdBadges.appendChild(badgesDiv);
+      tr.appendChild(tdBadges);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ── Sort ──
+  function sortBy(col) {
+    if (sortColumn === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = col;
+      sortDir = (col === 'model' || col === 'provider' || col === 'group') ? 'asc' : 'desc';
+    }
+    document.querySelectorAll('thead th').forEach(function(th) {
+      var isThis = th.getAttribute('data-col') === col;
+      th.classList.toggle('sorted', isThis);
+      var arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = isThis ? (sortDir === 'asc' ? '\u25B2' : '\u25BC') : '';
+    });
+    renderTable();
+  }
+
+  document.querySelectorAll('thead th[data-col]').forEach(function(th) {
+    th.addEventListener('click', function() { sortBy(th.getAttribute('data-col')); });
+  });
+
+  // ── Badge Filter ──
+  function filterByBadge(badge) {
+    activeBadgeFilter = activeBadgeFilter === badge ? null : badge;
+    renderTable();
+  }
+
+  // ── Provider Filter ──
+  function filterByProvider(provider) {
+    activeProviderFilter = activeProviderFilter === provider ? null : provider;
+    document.querySelectorAll('.provider-chip').forEach(function(chip) {
+      chip.classList.toggle('active', chip.getAttribute('data-provider') === activeProviderFilter);
+    });
+    renderTable();
+  }
+
+  // ── Build Provider Chips ──
+  function renderProviderFilters() {
+    var container = document.getElementById('providerFilters');
+    var seen = {};
+    MODELS.forEach(function(m) {
+      if (seen[m.provider]) return;
+      seen[m.provider] = true;
+      var info = PROVIDERS[m.provider];
+      var chip = document.createElement('span');
+      chip.className = 'provider-chip';
+      chip.setAttribute('data-provider', m.provider);
+      chip.addEventListener('click', function() { filterByProvider(m.provider); });
+      chip.appendChild(createProviderMono(m.provider));
+      chip.appendChild(document.createTextNode(' ' + m.provider));
+      container.appendChild(chip);
+    });
+  }
+
+  // ── Score Distribution Chart ──
+  function renderDistChart() {
+    var sorted = MODELS.slice().sort(function(a, b) { return b.score - a.score; });
+    var container = document.getElementById('distChart');
+    var maxScore = 60;
+    sorted.forEach(function(m) {
+      var tier = getTier(m.score);
+      var color = TIER_COLORS[tier];
+      var width = Math.round((m.score / maxScore) * 100);
+
+      var row = document.createElement('div');
+      row.className = 'dist-row';
+
+      var label = document.createElement('span');
+      label.className = 'dist-label';
+      label.textContent = m.model;
+      row.appendChild(label);
+
+      var barWrap = document.createElement('div');
+      barWrap.className = 'dist-bar-wrap';
+      var bar = document.createElement('div');
+      bar.className = 'dist-bar';
+      bar.style.cssText = 'width:' + width + '%;background:' + color;
+      barWrap.appendChild(bar);
+      row.appendChild(barWrap);
+
+      var score = document.createElement('span');
+      score.className = 'dist-score';
+      score.textContent = m.score;
+      row.appendChild(score);
+
+      container.appendChild(row);
+    });
+  }
+
+  // ── Top 5 Families ──
+  function renderFamilies() {
+    var families = [
+      {
+        rank: 1, name: 'Ministral', provider: 'Mistral AI',
+        members: [{ name: 'ministral-3:3b', score: 60 }, { name: 'ministral-3:8b', score: 60 }, { name: 'ministral-3:14b', score: 60 }],
+        badges: ['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'],
+        note: 'All three sizes identical. 3B achieves same quality as models 300x its size.'
+      },
+      {
+        rank: 2, name: 'Kimi', provider: 'Moonshot AI',
+        members: [{ name: 'kimi-k2.5', score: 60 }, { name: 'kimi-k2-thinking', score: 60 }, { name: 'kimi-k2:1t', score: 60 }],
+        badges: ['PERFECT','DUAL-LAYER','DETERMINISTIC','FLAG-AGNOSTIC'],
+        note: 'All three variants perfect. kimi-k2:1t improved from 59 to 60 in v4.'
+      },
+      {
+        rank: 3, name: 'Gemini', provider: 'Google',
+        members: [{ name: 'gemini-3-flash-preview', score: 60 }],
+        badges: ['PERFECT','DUAL-LAYER','ROCK-STABLE','DETERMINISTIC','FLAG-AGNOSTIC'],
+        note: 'Single member family. Perfect across all dimensions.'
+      },
+      {
+        rank: 4, name: 'Devstral', provider: 'Mistral AI',
+        members: [{ name: 'devstral-2:123b', score: 60 }, { name: 'devstral-small-2:24b', score: 56 }],
+        badges: ['ROCK-STABLE','DETERMINISTIC'],
+        note: 'Large variant perfect. Small variant near-perfect with boundary confusion on v_int.'
+      },
+      {
+        rank: 5, name: 'Qwen VL', provider: 'Alibaba',
+        members: [{ name: 'qwen3-vl:235b', score: 60 }, { name: 'qwen3-vl:235b-instruct', score: 57 }],
+        badges: ['ROCK-STABLE'],
+        note: 'Base variant reached 60/60 after server fix (+40). Instruct variant near-perfect with think sensitivity.'
+      }
+    ];
+
+    var container = document.getElementById('familiesGrid');
+    families.forEach(function(f) {
+      var p = PROVIDERS[f.provider];
+      var rankClass = f.rank === 1 ? 'gold' : f.rank === 2 ? 'silver' : f.rank === 3 ? 'bronze' : '';
+
+      var card = document.createElement('div');
+      card.className = 'family-card';
+
+      var rankDiv = document.createElement('div');
+      rankDiv.className = 'family-rank ' + rankClass;
+      rankDiv.textContent = f.rank;
+      card.appendChild(rankDiv);
+
+      var infoDiv = document.createElement('div');
+      infoDiv.className = 'family-info';
+
+      var nameDiv = document.createElement('div');
+      nameDiv.className = 'family-name';
+      var monoEl = document.createElement('span');
+      monoEl.className = 'provider-mono';
+      monoEl.style.background = p.color;
+      monoEl.textContent = p.mono;
+      nameDiv.appendChild(monoEl);
+      nameDiv.appendChild(document.createTextNode(' ' + f.name));
+      infoDiv.appendChild(nameDiv);
+
+      var membersDiv = document.createElement('div');
+      membersDiv.className = 'family-members';
+      f.members.forEach(function(m, i) {
+        if (i > 0) membersDiv.appendChild(document.createTextNode(' \u00B7 '));
+        var mSpan = document.createElement('span');
+        mSpan.className = 'mono';
+        mSpan.textContent = m.name;
+        membersDiv.appendChild(mSpan);
+        var sSpan = document.createElement('span');
+        var tier = getTier(m.score);
+        sSpan.style.cssText = 'color:' + TIER_COLORS[tier] + ';font-weight:600';
+        sSpan.textContent = ' ' + m.score + '/60';
+        membersDiv.appendChild(sSpan);
+      });
+      infoDiv.appendChild(membersDiv);
+
+      var noteDiv = document.createElement('div');
+      noteDiv.style.cssText = 'color:var(--muted);font-size:13px;margin-bottom:8px';
+      noteDiv.textContent = f.note;
+      infoDiv.appendChild(noteDiv);
+
+      var badgesDiv = document.createElement('div');
+      badgesDiv.className = 'family-badges';
+      f.badges.forEach(function(b) {
+        var pill = document.createElement('span');
+        pill.className = 'badge-pill badge-' + b;
+        pill.textContent = b;
+        badgesDiv.appendChild(pill);
+      });
+      infoDiv.appendChild(badgesDiv);
+
+      card.appendChild(infoDiv);
+      container.appendChild(card);
+    });
+  }
+
+  // ── Intersection Observer for Nav ──
+  function setupNavObserver() {
+    var sections = document.querySelectorAll('section[id]');
+    var navLinks = document.querySelectorAll('.nav-link');
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          navLinks.forEach(function(link) {
+            link.classList.toggle('active', link.getAttribute('data-section') === entry.target.id);
+          });
+        }
+      });
+    }, { rootMargin: '-20% 0px -60% 0px' });
+    sections.forEach(function(s) { observer.observe(s); });
+  }
+
+  // ── Init ──
+  renderProviderFilters();
+  renderTable();
+  renderDistChart();
+  renderFamilies();
+  setupNavObserver();
+})();
+</script>
+</body>
+</html>
