@@ -6,7 +6,6 @@ from dataclasses import dataclass
 DEFAULT_OPTIONS: dict = {
     "temperature": 0,
     "seed": 42,
-    "num_ctx": 4096,
 }
 
 
