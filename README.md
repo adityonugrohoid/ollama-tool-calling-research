@@ -34,8 +34,6 @@
 - [License](#license)
 - [Author](#author)
 
----
-
 ## The Problem
 
 ### Tool calling reliability is opaque across open-source LLMs
@@ -44,16 +42,16 @@ Open-source LLMs advertise "tool calling support" without disclosing how that su
 
 ### The Solution
 
-Systematic benchmark of 32 models via the Ollama Cloud API across 7 tests, 4 flag combinations, and two independent sweeps (v3 + v4), producing 60 scored checks per model. Results expose which families are flag-agnostic and production-safe, and which collapse under the voxel schema stress test -- the real discriminator.
+Systematic benchmark of 32 models via the Ollama Cloud API across 7 tests, 4 flag combinations, and two independent sweeps (v3 + v4), producing 60 scored checks per model. Results expose which families are flag-agnostic and production-safe, and which collapse under the voxel schema stress test, the real discriminator.
 
 ## Features
 
-- **7-test suite across 3 tiers** -- core invocation, multi-step stress, and voxel schema constraint tests with 5 sub-checks each
-- **4-flag matrix per test** -- all combinations of `stream` and `think` flags (S0T0/S0T1/S1T0/S1T1), 60 scored checks per model
-- **Dual-layer extraction** -- native `tool_calls` and XML text-fallback parsed from both `content` and `thinking` fields
-- **Reproducible runs** -- `temperature=0`, `seed=42` across all runs; retry with exponential backoff on transient 500/503 errors
-- **Group-based model registry** -- 32 models classified GA-GD by pass pattern; addressable as `ga`/`gb`/`gc`/`gd`/`all` from the CLI
-- **Auto-saved summaries** -- per-run markdown tables written to `observations/summaries/` with timestamps
+- **7-test suite across 3 tiers**: core invocation, multi-step stress, and voxel schema constraint tests with 5 sub-checks each
+- **4-flag matrix per test**: all combinations of `stream` and `think` flags (S0T0/S0T1/S1T0/S1T1), 60 scored checks per model
+- **Dual-layer extraction**: native `tool_calls` and XML text-fallback parsed from both `content` and `thinking` fields
+- **Reproducible runs**: `temperature=0`, `seed=42` across all runs; retry with exponential backoff on transient 500/503 errors
+- **Group-based model registry**: 32 models classified GA-GD by pass pattern; addressable as `ga`/`gb`/`gc`/`gd`/`all` from the CLI
+- **Auto-saved summaries**: per-run markdown tables written to `observations/summaries/` with timestamps
 
 ## Tech Stack
 
@@ -229,17 +227,17 @@ Ranked by: all members score 55+/60, rock-stable across sweeps, flag-agnostic.
 | 4 | Devstral | 2:123b, small-2:24b | 60, 56 | `ROCK-STABLE` `DETERMINISTIC` `FLAG-AGNOSTIC` |
 | 5 | Qwen VL | vl:235b, vl:235b-instruct | 60, 57 | `ROCK-STABLE` (instruct) |
 
-**Why Ministral ranks #1:** All three sizes (3B, 8B, 14B) achieve identical perfect scores -- every sub-check is `PPPP` across both sweeps, bit-for-bit deterministic. The 3B model matches 1T-parameter models, which is the strongest evidence against a size-quality correlation in this dataset.
+**Why Ministral ranks #1:** All three sizes (3B, 8B, 14B) achieve identical perfect scores: every sub-check is `PPPP` across both sweeps, bit-for-bit deterministic. The 3B model matches 1T-parameter models, which is the strongest evidence against a size-quality correlation in this dataset.
 
 ### Findings
 
-1. **No size-quality correlation** -- ministral-3:3b (3B) = 60/60, deepseek-v3.2 (671B) = 16/60
-2. **Streaming degrades, never improves** -- `stream=true` adds failure risk without recovering any failing model
-3. **Thinking is a wild card** -- `think=true` can help or hurt (deepseek-v3.1 alternation observed)
-4. **Layer independence** -- native and text-based tool calling are orthogonal capabilities
-5. **Flag agnosticism = reliability** -- all 10 perfect models are completely flag-agnostic
-6. **Voxel tests are the real discriminator** -- 25/32 pass simple tests, only 10/32 pass all voxel sub-checks
-7. **Measurement reproducibility is high** -- 14/32 models are fully deterministic at sub-check level across sweeps
+1. **No size-quality correlation**: ministral-3:3b (3B) = 60/60, deepseek-v3.2 (671B) = 16/60
+2. **Streaming degrades, never improves**: `stream=true` adds failure risk without recovering any failing model
+3. **Thinking is a wild card**: `think=true` can help or hurt (deepseek-v3.1 alternation observed)
+4. **Layer independence**: native and text-based tool calling are orthogonal capabilities
+5. **Flag agnosticism = reliability**: all 10 perfect models are completely flag-agnostic
+6. **Voxel tests are the real discriminator**: 25/32 pass simple tests, only 10/32 pass all voxel sub-checks
+7. **Measurement reproducibility is high**: 14/32 models are fully deterministic at sub-check level across sweeps
 
 ### Score distribution
 
@@ -286,7 +284,7 @@ Full report: [`observations/summaries/research_report.md`](observations/summarie
 
 ```
 ollama-tool-calling-research/
-├── run_all.py                      # Entry point -- --models, --tests, --flags
+├── run_all.py                      # Entry point with --models, --tests, --flags
 ├── src/
 │   ├── ollama_client.py            # Ollama SDK wrapper, retry logic, raw logging
 │   ├── response_layers.py          # Layer-aware extraction (native/text/thinking)
@@ -318,7 +316,7 @@ ollama-tool-calling-research/
 
 ## Testing
 
-The `tests/` directory is the research test suite itself -- each file implements one tool calling scenario and runs against any model + flag combo combination. Run directly via `run_all.py` (not pytest), since test functions receive the `FlagCombo` parameter and interact with the live Ollama API.
+The `tests/` directory is the research test suite itself: each file implements one tool calling scenario and runs against any model + flag combo combination. Run directly via `run_all.py` (not pytest), since test functions receive the `FlagCombo` parameter and interact with the live Ollama API.
 
 ```bash
 # Run the full suite against GA models (all flag combos)
